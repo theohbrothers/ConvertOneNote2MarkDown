@@ -711,7 +711,7 @@ else { $converter = "markdown"}
 
 # prompt to resolve links for obsidian 
 "-----------------------------------------------"
-"1: Resolve links (beta)"
+"1: Convert OneNote links to Markdown [[Link]]"
 "2: Keep onenote links"
 [int] $resolveLinks = Read-Host -Prompt "Entry"
 
