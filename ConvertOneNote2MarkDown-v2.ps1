@@ -283,7 +283,7 @@ Function ProcessSections ($group, $FilePath) {
 
             # https://gist.github.com/heardk/ded40b72056cee33abb18f3724e0a580
             try {
-                pandoc.exe -f  docx -t $converter-simple_tables-multiline_tables-grid_tables+pipe_tables -i $fullexportpath -o "$($fullfilepathwithoutextension).md" --wrap=none --atx-headers --extract-media="$($mediaPath)"
+                pandoc.exe -f  docx -t $converter-simple_tables-multiline_tables-grid_tables+pipe_tables -i $fullexportpath -o "$($fullfilepathwithoutextension).md" --wrap=none --markdown-headings=atx --extract-media="$($mediaPath)"
             }
             catch {
                 Write-Host "Error while converting file '$($page.name)' to md: $($Error[0].ToString())" -ForegroundColor Red

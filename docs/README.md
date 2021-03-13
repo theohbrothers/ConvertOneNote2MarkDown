@@ -13,7 +13,7 @@ permalink: /index.html
 
 # Convert OneNote to MarkDown for Obsidian
 
-An extension of [@nixsee's script](https://github.com/nixsee/ConvertOneNote2MarkDown) that i've made while migrating from OneNote to Obsidian.
+An extension of [@nixsee's script](https://github.com/nixsee/ConvertOneNote2MarkDown) from the original [@SjoerdV's script](https://github.com/SjoerdV/ConvertOneNote2MarkDown) that i've made while migrating from OneNote to Obsidian.
 
 ## Added Features 
 ### MOC for Obsidian
