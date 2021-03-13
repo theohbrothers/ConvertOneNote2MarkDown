@@ -18,7 +18,9 @@ $global:parsedLinksAmbiguousMatched = 0
 $global:PageIdArray = [System.Collections.ArrayList]::new()
 $global:PageValueArray = [System.Collections.ArrayList]::new()
 
-#Functions
+###################################################################################################################
+# AUX FUNCTIONS
+###################################################################################################################
 Function Remove-InvalidFileNameChars {
     param(
         [Parameter(Mandatory = $true,
@@ -158,6 +160,8 @@ Function ProcessSections ($group, $FilePath) {
                 $previouspagenamelevel2 = ""
                 $previouspagelevel = 1
                 $subpagelinkcountlevel1 = 0
+                $parent = $sectionFileName
+
                 "#### " + $page.name
 
                 if ($global:activateMOCForObsidian -eq 1)
@@ -170,6 +174,7 @@ Function ProcessSections ($group, $FilePath) {
                     $previouspagenamelevel2 = $pagename
                     $previouspagelevel = 2
                     $subpagelinkcountlevel2 = 0
+                    $parent = $previouspagenamelevel1
                     "##### " + $page.name
 
                     if ($global:activateMOCForObsidian -eq 1)
@@ -187,10 +192,12 @@ Function ProcessSections ($group, $FilePath) {
             elseif ($pagelevel -eq 3) {
                     if ($previouspagelevel -eq 2){
                         $pageprefix = "$($previouspagenamelevel1)$($prefixjoiner)$($previouspagenamelevel2)"
+                        $parent = $previouspagenamelevel2
                     }
                     # level 3 under level 1, without a level 2
                     elseif ($previouspagelevel -eq 1) {
                         $pageprefix = "$($previouspagenamelevel1)$($prefixjoiner)"
+                        $parent = $previouspagenamelevel1
                     }
                     #and if previous was 3, do nothing/keep previous label
                     $previouspagelevel = 3
@@ -304,7 +311,7 @@ Function ProcessSections ($group, $FilePath) {
                     if($global:activateGlobalFileName -eq 1) #Uses global file name to avoid naming problems
                     {
                         $global:fileCount++
-                        $destfilename = "$($global:filePrefix)$($global:fileCount)$($pageinsertedfile.Extension)"
+                        $destfilename = "$($global:filePrefix)$($global:fileCount)$([System.IO.Path]::GetExtension($pageinsertedfile.InsertedFile.preferredName))"
                     }
                     else {
                         $destfilename = $pageinsertedfile.InsertedFile.preferredName | Remove-InvalidFileNameCharsInsertedFiles    
@@ -333,13 +340,13 @@ Function ProcessSections ($group, $FilePath) {
             $orig[0] = "# $($page.name)"
             $insert1 = "$($page.dateTime)"
             $insert1 =[Datetime]::ParseExact($insert1, 'yyyy-MM-ddTHH:mm:ss.fffZ', $null)
-            $insert1 = $insert1.ToString("yyyy-MM-dd HH:mm:ss
-            ")
+            $insert1 = $insert1.ToString("yyyy-MM-dd HH:mm:ss")
             $insert2 = "---" 
+            $insert3 = "Related: [[$($parent)]]"
 
             if($global:activateMOCForObsidian -eq 1)
             {
-                Set-Content -Path "$($fullfilepathwithoutextension).md" -Value $orig[0..0], $insert1, $insert2, $insert2, $orig[6..$orig.Length] -encoding utf8
+                Set-Content -Path "$($fullfilepathwithoutextension).md" -Value $orig[0..0], $insert1, $insert2, $insert3, $insert2, $orig[6..$orig.Length] -encoding utf8
             }
             else {
                 Set-Content -Path "$($fullfilepathwithoutextension).md" -Value $orig[0..0], $insert1, $insert2, $orig[6..$orig.Length] -encoding utf8    
@@ -347,12 +354,14 @@ Function ProcessSections ($group, $FilePath) {
             
             
             #Clear double spaces from bullets and nonbreaking spaces from blank lines
-            if ($keepspaces -eq 2 ) {
+            if ($keepspaces -ne 2 ) {
                 #do nothing
             }
             else {
                 try {
-                    ((Get-Content -path "$($fullfilepathwithoutextension).md" -Raw -encoding utf8).Replace(">","").Replace("<","").Replace([char]0x00A0,[char]0x000A).Replace([char]0x000A,[char]0x000A).Replace("`r`n`r`n", "`r`n")) | Set-Content -Path "$($fullfilepathwithoutextension).md" -encoding utf8                  }
+                    #TODO - Clear double spaces without crashing tables
+                    ((Get-Content -path "$($fullfilepathwithoutextension).md" -Raw -encoding utf8).Replace(">","").Replace("<","").Replace([char]0x00A0,[char]0x000A).Replace([char]0x000A,[char]0x000A).Replace("`r`n`r`n", "`r`n")) | Set-Content -Path "$($fullfilepathwithoutextension).md" -encoding utf8                  
+                }
                 catch {
                     Write-Host "Error while clearing double spaces from file '$($fullfilepathwithoutextension)' : $($Error[0].ToString())" -ForegroundColor Red
                     $totalerr += "Error while clearing double spaces from file '$($fullfilepathwithoutextension)' : $($Error[0].ToString())`r`n"
@@ -408,6 +417,9 @@ Function ProcessSections ($group, $FilePath) {
             # Clear backslash escape symbols
             if ($keepescape -eq 2 ) {
                 #do nothing
+            }
+            elseif ($keepescape -eq 3) {
+                ((Get-Content -path "$($fullfilepathwithoutextension).md" -Raw -encoding utf8).Replace("\",'/')) | Set-Content -Path "$($fullfilepathwithoutextension).md" -encoding utf8
             }
             else {
                 ((Get-Content -path "$($fullfilepathwithoutextension).md" -Raw -encoding utf8).Replace("\",'')) | Set-Content -Path "$($fullfilepathwithoutextension).md" -encoding utf8
@@ -592,6 +604,10 @@ Function ParseLinks($notesdestpath)
     Write-Host "`tNot matched`t:`t$($global:parsedLinksNotMatched)"
 }
 
+###################################################################################################################
+# INPUTS
+###################################################################################################################
+
 ""
 "-----------------------------------------------"
 # ask for the Notes root path
@@ -699,15 +715,20 @@ else { $converter = "markdown"}
 
 #prompt to clear double spaces between bullets
 "-----------------------------------------------"
-"1: Clear double spaces in bullets - Default"
-"2: Keep double spaces"
+"1: Keep double spaces  - Default"
+"2: Clear double spaces in bullets"
 [int] $keepspaces = Read-Host -Prompt "Entry"
 
-# prompt to clear escape symbols from md files 
-"-----------------------------------------------"
-"1: Clear '\' symbol escape character from files"
-"2: Keep '\' symbol escape"
-[int] $keepescape = Read-Host -Prompt "Entry"
+ # prompt to clear escape symbols from md files
+[int] $keepescape = 3 # (\ -> /)
+if (!$global:activateMOCForObsidian)
+{
+    
+    "-----------------------------------------------"
+    "1: Clear '\' symbol escape character from files"
+    "2: Keep '\' symbol escape"
+    $keepescape = Read-Host -Prompt "Entry"
+}
 
 # prompt to resolve links for obsidian 
 "-----------------------------------------------"
@@ -715,6 +736,9 @@ else { $converter = "markdown"}
 "2: Keep onenote links"
 [int] $resolveLinks = Read-Host -Prompt "Entry"
 
+###################################################################################################################
+# Start
+###################################################################################################################
 
 if (Test-Path -Path $notesdestpath) {
     # open OneNote hierarchy
