@@ -202,7 +202,7 @@ Function ProcessSections ($group, $FilePath) {
                 # Change MD file Object Name References
                 try {
                     $pageinsertedfile2 = $pageinsertedfile.InsertedFile.preferredName.Replace("$", "\$").Replace("^", "\^").Replace("'", "\'")
-                    ((Get-Content -path "$($fullfilepathwithoutextension).md" -Raw).Replace("$($pageinsertedfile2)", "[$($destfilename)]($($mediaPath2)/media/$($destfilename))")) | Set-Content -Path "$($fullfilepathwithoutextension).md"
+                    ((Get-Content -path "$($fullfilepathwithoutextension).md" -Raw).Replace("$($pageinsertedfile2)", "[$($destfilename)]($($mediaPath)/media/$($destfilename))")) | Set-Content -Path "$($fullfilepathwithoutextension).md"
 
                 }
                 catch {
