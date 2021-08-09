@@ -258,7 +258,7 @@ Function Validate-Configuration {
         # Validate a given configuration against a prototype configuration
         $defaultConfig = Get-DefaultConfiguration
         foreach ($key in $defaultConfig.Keys) {
-            if (! $Config.Contains($key)) {
+            if (! $Config.Contains($key) -or ($null -eq $Config[$key]) -or ($null -eq $Config[$key]['value'])) {
                 throw "Missing configuration option '$key'"
             }
             if ($defaultConfig[$key]['default'].GetType().FullName -ne $Config[$key]['value'].GetType().FullName) {

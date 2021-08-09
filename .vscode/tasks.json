@@ -26,6 +26,18 @@
             "type": "shell",
             "command": "pwsh -Command '. ./ConvertOneNote2MarkDown-v2.ps1 -Exit; New-ConfigurationFile'",
             "group": "build"
+        },
+        {
+            "label": "Convert",
+            "type": "shell",
+            "command": "pwsh -Command '. ./ConvertOneNote2MarkDown-v2.ps1'",
+            "group": "none"
+        },
+        {
+            "label": "Convert (verbose)",
+            "type": "shell",
+            "command": "pwsh -Command '. ./ConvertOneNote2MarkDown-v2.ps1 -Verbose'",
+            "group": "none"
         }
     ]
 }
