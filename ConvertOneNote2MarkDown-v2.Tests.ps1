@@ -208,7 +208,6 @@ Describe "Remove-InvalidFileNameChars" -Tag 'Unit' {
             $fileName = 'foo'
 
             { $fileName | Remove-InvalidFileNameChars } | Should -Not -Throw
-
         }
 
     }
@@ -281,7 +280,6 @@ Describe "Remove-InvalidFileNameCharsInsertedFiles" -Tag 'Unit' {
             $fileName = 'foo'
 
             { $fileName | Remove-InvalidFileNameCharsInsertedFiles } | Should -Not -Throw
-
         }
 
     }
@@ -322,6 +320,34 @@ Describe "Remove-InvalidFileNameCharsInsertedFiles" -Tag 'Unit' {
             $result = Remove-InvalidFileNameCharsInsertedFiles -Name $fileName -KeepPathSpaces
 
             $result | Should -Be $expectedFileName
+        }
+
+    }
+
+}
+
+
+Describe "Encode-Markdown" -Tag 'Unit' {
+
+    Context 'Parameters' {
+
+        It "Accept pipeline input" {
+            $content = 'foo'
+
+            { $content | Encode-Markdown } | Should -Not -Throw
+        }
+
+    }
+
+    Context 'Behavior' {
+
+        It "Should encode given content in markdown" {
+            $content = '\*_{}[]()#+-.!`'
+            $expectedContent = '\\\*\_\{\}\[\]\(\)\#\+\-\.\!```'
+
+            $result = Encode-Markdown -Name $content
+
+            $result | Should -Be $expectedContent
         }
 
     }
@@ -628,10 +654,10 @@ AAAAAElFTkSuQmCC</one:Data>
                 <one:T selected="all"><![CDATA[Attachments:]]></one:T>
             </one:OE>
             <one:OE creationTime="2021-08-06T16:08:25.000Z" lastModifiedTime="2021-08-06T16:08:25.000Z" objectID="{902AD630-91B7-4D8B-96A7-107572724072}{49}{B0}" selected="all" alignment="left">
-                <one:InsertedFile selected="all" pathCache="C:\Users\LeonardJonathan\AppData\Local\Microsoft\OneNote\16.0\cache\00001BNS.bin" pathSource="C:\Users\LeonardJonathan\Desktop\attachment1.txt" preferredName="attachment1.txt" />
+                <one:InsertedFile selected="all" pathCache="C:\Users\LeonardJonathan\AppData\Local\Microsoft\OneNote\16.0\cache\00001BNS.bin" pathSource="C:\Users\LeonardJonathan\Desktop\attachment1(something in brackets).txt" preferredName="attachment1(something in brackets).txt" />
             </one:OE>
             <one:OE creationTime="2021-08-06T16:08:10.000Z" lastModifiedTime="2021-08-06T16:08:10.000Z" objectID="{902AD630-91B7-4D8B-96A7-107572724072}{41}{B0}" selected="all" alignment="left">
-                <one:InsertedFile selected="all" pathCache="C:\Users\LeonardJonathan\AppData\Local\Microsoft\OneNote\16.0\cache\00001BNS.bin" pathSource="C:\Users\LeonardJonathan\Desktop\attachment2.txt" preferredName="attachment2.txt" />
+                <one:InsertedFile selected="all" pathCache="C:\Users\LeonardJonathan\AppData\Local\Microsoft\OneNote\16.0\cache\00001BNS.bin" pathSource="C:\Users\LeonardJonathan\Desktop\attachment2[something in brackets].txt" preferredName="attachment2(something in brackets).txt" />
             </one:OE>
         </one:OEChildren>
     </one:Outline>
@@ -704,6 +730,20 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
 
                 # Test the first level page preceded by a second level page
                 $pageCfg5['pagePrefix'] | Should -Be ''
+            }
+        }
+
+        It "Should determine attachment references correctly" {
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
+
+            foreach ($pageCfg in $result) {
+                $pageCfg['insertedAttachments'].Count | Should -Be 2
+
+                $pageCfg['insertedAttachments'][0]['markdownFileName'] | Should -Be 'attachment1\(something\-in\-brackets\)\.txt'
+                $pageCfg['insertedAttachments'][1]['markdownFileName'] | Should -Be 'attachment2\(something\-in\-brackets\)\.txt'
             }
         }
 

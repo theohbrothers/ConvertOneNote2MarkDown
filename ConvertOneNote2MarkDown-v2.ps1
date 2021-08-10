@@ -358,6 +358,24 @@ Function Remove-InvalidFileNameCharsInsertedFiles {
     return $newName
 }
 
+Function Encode-Markdown {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true,Position = 0,ValueFromPipeline = $true,ValueFromPipelineByPropertyName = $true)]
+        [AllowEmptyString()]
+        [string]$Name
+    )
+
+    $markdownChars = '\*_{}[]()#+-.!'.ToCharArray()
+    foreach ($c in $markdownChars) {
+        $Name = $Name.Replace("$c", "\$c")
+    }
+    $markdownChars2 = '`'
+    foreach ($c in $markdownChars2) {
+        $Name = $Name.Replace("$c", "$c$c$c")
+    }
+    $Name
+}
 Function New-OneNoteConnection {
     [CmdletBinding()]
     param ()
@@ -659,7 +677,7 @@ Function New-SectionGroupConversionConfig {
                                             $attachmentCfg = [ordered]@{}
                                             $attachmentCfg['object'] =  $i
                                             $attachmentCfg['nameCompat'] =  $i.preferredName | Remove-InvalidFileNameCharsInsertedFiles
-                                            $attachmentCfg['markdownFileName'] =  $attachmentCfg['nameCompat'].Replace("$", "\$").Replace("^", "\^").Replace("'", "\'")
+                                            $attachmentCfg['markdownFileName'] =  $attachmentCfg['nameCompat'] | Encode-Markdown
                                             $attachmentCfg['source'] =  $i.pathCache
                                             $attachmentCfg['destination'] =  [io.path]::combine( $pageCfg['mediaPath'], $attachmentCfg['nameCompat'] )
 
