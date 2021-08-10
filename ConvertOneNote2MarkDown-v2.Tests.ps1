@@ -360,18 +360,20 @@ Describe "New-OneNoteConnection" -Tag 'Unit' {
 }
 function Get-FakeOneNoteHierarchy {
     # Sample outerXML of a hierarchy object. Here we have two identical notebooks: 'test' and 'test2' with a simple nested structure, each with 9 pages, in groups of 3:
-    # 1) The 1st, 2nd, and 3rd pages are uniqely named, in the notebook base
-    # 3) The 4th, 5th 6th pages are a copy of 1), but nested 1 level
-    # 3) The 7th, 8th 9th pages are a copy of 1), but nested 2 levels
+    # 1) The 1st, 2nd, 3rd, 4th, 5th in the notebook base
+    # 2) A copy of 1), but nested 1 level
+    # 3) A copy of 1), but nested 2 levels
     $hierarchy = @'
 <?xml version="1.0"?>
 <one:Notebooks xmlns:one="http://schemas.microsoft.com/office/onenote/2013/onenote">
     <one:Notebook name="test" nickname="test" ID="{38E47DAB-211E-4EC1-85F1-129656A9D2CE}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/" lastModifiedTime="2021-08-06T16:27:58.000Z" color="#ADE792">
         <one:Section name="s0" ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/s0.one" lastModifiedTime="2021-08-06T16:08:25.000Z" color="#8AA8E4">
             <one:Page ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{E19461971475288592555920101886406896686096991}" name="p0.0 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T16:08:25.000Z" pageLevel="1" />
-            <one:Page ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{E19542261697052950701320178013485171541838441}" name="p0.1 test " dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:38:01.000Z" pageLevel="2" />
+            <one:Page ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{E19542261697052950701320178013485171541838441}" name="p0.1 test" dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:38:01.000Z" pageLevel="2" />
             <one:Page ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{E19535140647270019211520151454305551340000401}" name="p0.2 test" dateTime="2021-08-06T15:38:03.000Z" lastModifiedTime="2021-08-06T15:46:36.000Z" pageLevel="3" />
-        </one:Section>
+            <one:Page ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{E19542261697052950701320178013485171541838442}" name="p0.3 test" dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:38:01.000Z" pageLevel="2" />
+            <one:Page ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{E19461971475288592555920101886406896686096992}" name="p0.4 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T16:08:25.000Z" pageLevel="1" />
+            </one:Section>
         <one:SectionGroup name="OneNote_RecycleBin" ID="{1298D961-43A6-46E4-81FC-B4FD9F87755C}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/OneNote_RecycleBin/" lastModifiedTime="2021-08-06T16:27:58.000Z" isRecycleBin="true">
             <one:Section name="Deleted Pages" ID="{4E51704F-4F96-4D17-A453-EE11A4BEEBD8}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/OneNote_RecycleBin/OneNote_DeletedPages.one" lastModifiedTime="2021-08-06T15:57:18.000Z" color="#E1E1E1" isInRecycleBin="true" isDeletedPages="true">
                 <one:Page ID="{4E51704F-4F96-4D17-A453-EE11A4BEEBD8}{1}{E19471045090380451344020177961181143029428871}" name="Untitled page" dateTime="2021-08-06T00:44:05.000Z" lastModifiedTime="2021-08-06T00:44:05.000Z" pageLevel="1" isInRecycleBin="true" />
@@ -380,24 +382,30 @@ function Get-FakeOneNoteHierarchy {
         <one:SectionGroup name="g0" ID="{9570CCF6-17C2-4DCE-83A0-F58AE8914E29}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/g9/" lastModifiedTime="2021-08-06T15:49:20.000Z">
             <one:Section name="s1" ID="{BE566C4F-73DC-43BD-AE7A-1954F8B22C2A}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/g9/s1.one" lastModifiedTime="2021-08-06T15:49:13.000Z" color="#F5F96F">
                 <one:Page ID="{BE566C4F-73DC-43BD-AE7A-1954F8B22C2A}{1}{E195456188209333946682201130923317421855940917}" name="p1.0 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T15:49:13.000Z" pageLevel="1" />
-                <one:Page ID="{BE566C4F-73DC-43BD-AE7A-1954F8B22C2A}{1}{E195456188209333946682201130923317421855940918}" name="p1.1 test " dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:44:24.000Z" pageLevel="2" />
+                <one:Page ID="{BE566C4F-73DC-43BD-AE7A-1954F8B22C2A}{1}{E195456188209333946682201130923317421855940918}" name="p1.1 test" dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:44:24.000Z" pageLevel="2" />
                 <one:Page ID="{BE566C4F-73DC-43BD-AE7A-1954F8B22C2A}{1}{E195456188209333946682201130923317421855940919}" name="p1.2 test" dateTime="2021-08-06T15:38:03.000Z" lastModifiedTime="2021-08-06T15:44:29.000Z" pageLevel="3" />
-            </one:Section>
+                <one:Page ID="{BE566C4F-73DC-43BD-AE7A-1954F8B22C2A}{1}{E195456188209333946682201130923317421855940920}" name="p1.3 test" dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:44:24.000Z" pageLevel="2" />
+                <one:Page ID="{BE566C4F-73DC-43BD-AE7A-1954F8B22C2A}{1}{E195456188209333946682201130923317421855940921}" name="p1.4 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T15:49:13.000Z" pageLevel="1" />
+                </one:Section>
             <one:SectionGroup name="g1" ID="{9FD73490-F779-4556-BEBF-2185A1938883}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/g9/g1/" lastModifiedTime="2021-08-06T15:49:20.000Z">
                 <one:Section name="s2" ID="{0ED877BC-2887-4FF7-B5D4-394608754507}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/g9/g1/s2.one" lastModifiedTime="2021-08-06T15:49:20.000Z" color="#ADE792">
                     <one:Page ID="{0ED877BC-2887-4FF7-B5D4-394608754507}{1}{E194664865830060382992201186404186651426498715}" name="p2.0 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T15:45:35.000Z" pageLevel="1" />
-                    <one:Page ID="{0ED877BC-2887-4FF7-B5D4-394608754507}{1}{E194664865830060382992201186404186651426498716}" name="p2.1 test " dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:45:37.000Z" pageLevel="2" />
+                    <one:Page ID="{0ED877BC-2887-4FF7-B5D4-394608754507}{1}{E194664865830060382992201186404186651426498716}" name="p2.1 test" dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:45:37.000Z" pageLevel="2" />
                     <one:Page ID="{0ED877BC-2887-4FF7-B5D4-394608754507}{1}{E194664865830060382992201186404186651426498717}" name="p2.2 test" dateTime="2021-08-06T15:38:03.000Z" lastModifiedTime="2021-08-06T15:45:38.000Z" pageLevel="3" />
-                </one:Section>
+                    <one:Page ID="{0ED877BC-2887-4FF7-B5D4-394608754507}{1}{E194664865830060382992201186404186651426498718}" name="p2.3 test" dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:45:37.000Z" pageLevel="2" />
+                    <one:Page ID="{0ED877BC-2887-4FF7-B5D4-394608754507}{1}{E194664865830060382992201186404186651426498719}" name="p2.4 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T15:45:35.000Z" pageLevel="1" />
+                    </one:Section>
             </one:SectionGroup>
         </one:SectionGroup>
     </one:Notebook>
     <one:Notebook name="test2" nickname="test2" ID="{262450BF-461F-4951-92D3-80C3FC76D27B}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test2/" lastModifiedTime="2021-08-06T16:28:08.000Z" color="#91BAAE" isCurrentlyViewed="true">
         <one:Section name="s0" ID="{F8F6B54D-769A-43DF-9FD0-ED9F51054880}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test2/s0.one" lastModifiedTime="2021-08-06T16:09:11.000Z" color="#8AA8E4">
             <one:Page ID="{F8F6B54D-769A-43DF-9FD0-ED9F51054880}{1}{E19555114943310877601019666294307688380101014}" name="p0.0 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T16:09:11.000Z" pageLevel="1" />
-            <one:Page ID="{F8F6B54D-769A-43DF-9FD0-ED9F51054880}{1}{E19555114943310877601019666294307688380101015}" name="p0.1 test " dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:38:01.000Z" pageLevel="2" />
+            <one:Page ID="{F8F6B54D-769A-43DF-9FD0-ED9F51054880}{1}{E19555114943310877601019666294307688380101015}" name="p0.1 test" dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:38:01.000Z" pageLevel="2" />
             <one:Page ID="{F8F6B54D-769A-43DF-9FD0-ED9F51054880}{1}{E19555114943310877601019666294307688380101016}" name="p0.2 test" dateTime="2021-08-06T15:38:03.000Z" lastModifiedTime="2021-08-06T15:46:36.000Z" pageLevel="3" />
-        </one:Section>
+            <one:Page ID="{F8F6B54D-769A-43DF-9FD0-ED9F51054880}{1}{E19555114943310877601019666294307688380101017}" name="p0.3 test" dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:38:01.000Z" pageLevel="2" />
+            <one:Page ID="{F8F6B54D-769A-43DF-9FD0-ED9F51054880}{1}{E19555114943310877601019666294307688380101018}" name="p0.4 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T16:09:11.000Z" pageLevel="1" />
+            </one:Section>
         <one:SectionGroup name="OneNote_RecycleBin" ID="{1908052E-BCA5-491C-AC6D-6A0D0914B94A}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test2/OneNote_RecycleBin/" lastModifiedTime="2021-08-06T16:28:08.000Z" isRecycleBin="true" isCurrentlyViewed="true">
             <one:Section name="Deleted Pages" ID="{E136ED4A-ED9F-4B1B-A562-183C91FF483A}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test2/OneNote_RecycleBin/OneNote_DeletedPages.one" lastModifiedTime="2021-08-06T15:57:46.000Z" color="#E1E1E1" isCurrentlyViewed="true" isInRecycleBin="true" isDeletedPages="true">
                 <one:Page ID="{E136ED4A-ED9F-4B1B-A562-183C91FF483A}{1}{E19521355828597401344720101901508363770787001}" name="Untitled page" dateTime="2021-08-06T15:57:35.000Z" lastModifiedTime="2021-08-06T15:57:35.000Z" pageLevel="1" isInRecycleBin="true" isCurrentlyViewed="true" />
@@ -405,15 +413,19 @@ function Get-FakeOneNoteHierarchy {
         </one:SectionGroup>
         <one:SectionGroup name="g0" ID="{12BCC0AF-9077-4795-89B3-92731DA42BF1}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test2/g0/" lastModifiedTime="2021-08-06T15:45:38.000Z">
             <one:Section name="s1" ID="{66C286AD-A732-4921-BFC3-DB419E018FC5}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test2/g0/s1.one" lastModifiedTime="2021-08-06T15:44:31.000Z" color="#F5F96F">
-                <one:Page ID="{66C286AD-A732-4921-BFC3-DB419E018FC5}{1}{E19522158766404420541920144636792947261567311}" name="p1.0 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T15:43:18.000Z" pageLevel="1" />
-                <one:Page ID="{66C286AD-A732-4921-BFC3-DB419E018FC5}{1}{E1955860956312733599901975868119645317054981}" name="p1.1 test " dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:44:24.000Z" pageLevel="2" />
+                <one:Page ID="{66C286AD-A732-4921-BFC3-DB419E018FC5}{1}{E1952215876640442054192014463679294726156731}" name="p1.0 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T15:43:18.000Z" pageLevel="1" />
+                <one:Page ID="{66C286AD-A732-4921-BFC3-DB419E018FC5}{1}{E1955860956312733599901975868119645317054981}" name="p1.1 test" dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:44:24.000Z" pageLevel="2" />
                 <one:Page ID="{66C286AD-A732-4921-BFC3-DB419E018FC5}{1}{E1956839732948790767531946682831100003055561}" name="p1.2 test" dateTime="2021-08-06T15:38:03.000Z" lastModifiedTime="2021-08-06T15:44:29.000Z" pageLevel="3" />
+                <one:Page ID="{66C286AD-A732-4921-BFC3-DB419E018FC5}{1}{E1955860956312733599901975868119645317054982}" name="p1.3 test" dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:44:24.000Z" pageLevel="2" />
+                <one:Page ID="{66C286AD-A732-4921-BFC3-DB419E018FC5}{1}{E1952215876640442054192014463679294726156732}" name="p1.4 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T15:43:18.000Z" pageLevel="1" />
             </one:Section>
             <one:SectionGroup name="g1" ID="{70DCA046-102D-43B3-A39B-EA8A6B7D7CAF}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test2/g0/g1/" lastModifiedTime="2021-08-06T15:45:38.000Z">
                 <one:Section name="s2" ID="{659C0A68-EEC9-454E-AEB6-34AFE4D8C395}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test2/g0/g1/s2.one" lastModifiedTime="2021-08-06T15:45:38.000Z" color="#ADE792">
                     <one:Page ID="{659C0A68-EEC9-454E-AEB6-34AFE4D8C395}{1}{E1950041523555344809591971866755563186297671}" name="p2.0 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T15:45:35.000Z" pageLevel="1" />
-                    <one:Page ID="{659C0A68-EEC9-454E-AEB6-34AFE4D8C395}{1}{E1952193260194966589281945646821144837131531}" name="p2.1 test " dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:45:37.000Z" pageLevel="2" />
+                    <one:Page ID="{659C0A68-EEC9-454E-AEB6-34AFE4D8C395}{1}{E1952193260194966589281945646821144837131531}" name="p2.1 test" dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:45:37.000Z" pageLevel="2" />
                     <one:Page ID="{659C0A68-EEC9-454E-AEB6-34AFE4D8C395}{1}{E1956557557720375793251994010925467554249381}" name="p2.2 test" dateTime="2021-08-06T15:38:03.000Z" lastModifiedTime="2021-08-06T15:45:38.000Z" pageLevel="3" />
+                    <one:Page ID="{659C0A68-EEC9-454E-AEB6-34AFE4D8C395}{1}{E1952193260194966589281945646821144837131532}" name="p2.3 test" dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:45:37.000Z" pageLevel="2" />
+                    <one:Page ID="{659C0A68-EEC9-454E-AEB6-34AFE4D8C395}{1}{E1950041523555344809591971866755563186297672}" name="p2.4 test" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T15:45:35.000Z" pageLevel="1" />
                 </one:Section>
             </one:SectionGroup>
         </one:SectionGroup>
@@ -426,8 +438,8 @@ function Get-FakeOneNoteHierarchy {
 function Get-FakeOneNoteHierarchyWithDuplicatePageNames {
     # Sample outerXML of a hierarchy object. Here we have two identical notebooks: 'test' and 'test2' with a simple nested structure, each with 9 pages, in groups of 3:
     # 1) The 1st, 2nd, and 3rd pages are identically named, in the notebook base
-    # 3) The 4th, 5th 6th pages are a copy of 1), but nested 1 level
-    # 3) The 7th, 8th 9th pages are a copy of 1), but nested 2 levels
+    # 2) A copy of 1), but nested 1 level
+    # 3) A copy of 1), but nested 2 levels
     $hierarchy = @'
 <?xml version="1.0"?>
 <one:Notebooks xmlns:one="http://schemas.microsoft.com/office/onenote/2013/onenote">
@@ -630,15 +642,47 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
         It "Should constructs individual conversion configuration(s) for pages, based on a given Section Group XML object. Ignores pages in recycle bin." {
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
+        }
+
+        It "Should get its pagePrefix from its parent page (if any)" {
+            $params['Config']['prefixFolders']['value'] = 1
+
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
+
+            for ($i = 0; $i -lt $result.Count; $i = $i + 5) { # Test in fives
+                $pageCfg1 = $result[$i] # First level page
+                $pageCfg2 = $result[$i + 1] # Second level page preceded by a first level page
+                $pageCfg3 = $result[$i + 2] # Third level page preceded by a second level page
+                $pageCfg4 = $result[$i + 3] # Third level page preceded by a second level page
+                $pageCfg5 = $result[$i + 4] # Third level page preceded by a second level page
+
+                # Test the first level page
+                $pageCfg1['pagePrefix'] | Should -Be ''
+
+                # Test the second level page preceded by a first level page
+                $pageCfg2['pagePrefix'] | Should -Be "$( $pageCfg1['filePathRel'] )$( [io.path]::DirectorySeparatorChar )"
+
+                # Test the third level page preceded by a second level page
+                $pageCfg3['pagePrefix'] | Should -Be "$( $pageCfg2['filePathRel'] )$( [io.path]::DirectorySeparatorChar )"
+
+                # Test the second level page preceded by a third level page
+                $pageCfg4['pagePrefix'] | Should -Be "$( $pageCfg1['filePathRel'] )$( [io.path]::DirectorySeparatorChar )"
+
+                # Test the first level page preceded by a second level page
+                $pageCfg5['pagePrefix'] | Should -Be ''
+            }
         }
 
         It "Should generate fully unique docx file for each page, even for identically-named pages in a section" {
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
 
             for ($i = 0; $i -lt $result.Count; $i++) {
                 $count = 0
@@ -654,7 +698,7 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
             $params['SectionGroups'] = $fakeHierarchy.Notebooks.Notebook
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
             $result.Count | Should -Be 18
 
             for ($i = 0; $i -lt $result.Count; $i++) {
@@ -673,7 +717,7 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
             $params['SectionGroups'] = $fakeHierarchy.Notebooks.Notebook
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
             $result.Count | Should -Be 18
 
             for ($i = 0; $i -lt $result.Count; $i = $i + 3) { # Test in threes
@@ -697,8 +741,8 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
 
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
 
             # Test the first object
             $regex = "^$( [regex]::Escape($params['Config']['notesdestpath']['value']) )"
@@ -724,13 +768,15 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
 
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
 
-            for ($i = 0; $i -lt $result.Count; $i = $i + 3) { # Test in threes
+            for ($i = 0; $i -lt $result.Count; $i = $i + 5) { # Test in fives
                 $pageCfg1 = $result[$i] # First level page
                 $pageCfg2 = $result[$i + 1] # Second level page preceded by a first level page
                 $pageCfg3 = $result[$i + 2] # Third level page preceded by a second level page
+                $pageCfg4 = $result[$i + 3] # Second level page preceded by a third level page
+                $pageCfg5 = $result[$i + 4] # First level page preceded by a second level page
 
                 # Test the first level page
                 Split-Path $pageCfg1['fullfilepathwithoutextension'] -Leaf | Should -Be  $pageCfg1['nameCompat']
@@ -746,19 +792,31 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
                 Split-Path $pageCfg3['fullfilepathwithoutextension'] -Leaf | Should -Be  $pageCfg3['nameCompat']
                 Split-Path $pageCfg3['fullfilepathwithoutextension'] -Parent | Should -Be $pageCfg3['fullexportdirpath']
                 $pageCfg3['levelsPrefix']| Should -Be "$( '../' * ($pageCfg3['levelsFromRoot'] + $pageCfg3['pageLevel'] - 1) )"
+
+                # Test the second level page preceded by a third level page
+                Split-Path $pageCfg4['fullfilepathwithoutextension'] -Leaf | Should -Be $pageCfg4['nameCompat']
+                Split-Path $pageCfg4['fullfilepathwithoutextension'] -Parent | Should -Be $pageCfg4['fullexportdirpath']
+                $pageCfg4['levelsPrefix']| Should -Be "$( '../' * ($pageCfg4['levelsFromRoot'] + $pageCfg4['pageLevel'] - 1) )"
+
+                # Test the first level page preceded by a second level page
+                Split-Path $pageCfg5['fullfilepathwithoutextension'] -Leaf | Should -Be $pageCfg5['nameCompat']
+                Split-Path $pageCfg5['fullfilepathwithoutextension'] -Parent | Should -Be $pageCfg5['fullexportdirpath']
+                $pageCfg5['levelsPrefix']| Should -Be "$( '../' * ($pageCfg5['levelsFromRoot'] + $pageCfg5['pageLevel'] - 1) )"
             }
 
             $params['Config']['prefixFolders']['value'] = 2
 
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
 
-            for ($i = 0; $i -lt $result.Count; $i = $i + 3) { # Test in threes
+            for ($i = 0; $i -lt $result.Count; $i = $i + 5) { # Test in fives
                 $pageCfg1 = $result[$i] # First level page
                 $pageCfg2 = $result[$i + 1] # Second level page preceded by a first level page
                 $pageCfg3 = $result[$i + 2] # Third level page preceded by a second level page
+                $pageCfg4 = $result[$i + 3] # Second level page preceded by a third level page
+                $pageCfg5 = $result[$i + 4] # First level page preceded by a second level page
 
                 # Test the first level page
                 $pageCfg1['filePathRelUnderscore'] | Should -Be "$( $pageCfg1['nameCompat'] )"
@@ -777,6 +835,18 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
                 Split-Path $pageCfg3['fullfilepathwithoutextension'] -Leaf | Should -Be  "$( $pageCfg1['nameCompat'] )_$( $pageCfg2['nameCompat'] )_$( $pageCfg3['nameCompat'] )"
                 Split-Path $pageCfg3['fullfilepathwithoutextension'] -Parent | Should -Be $pageCfg3['fullexportdirpath']
                 $pageCfg3['levelsPrefix']| Should -Be "$( '../' * ($pageCfg3['levelsFromRoot'] + 1 - 1) )"
+
+                # Test the second level page preceded by a third level page
+                $pageCfg4['filePathRelUnderscore'] | Should -Be "$( $pageCfg1['nameCompat'] )_$( $pageCfg4['nameCompat'] )"
+                Split-Path $pageCfg4['fullfilepathwithoutextension'] -Leaf | Should -Be  "$( $pageCfg1['nameCompat'] )_$( $pageCfg4['nameCompat'] )"
+                Split-Path $pageCfg4['fullfilepathwithoutextension'] -Parent | Should -Be $pageCfg4['fullexportdirpath']
+                $pageCfg4['levelsPrefix']| Should -Be "$( '../' * ($pageCfg4['levelsFromRoot'] + 1 - 1) )"
+
+                # Test the first level page preceded by a second level page
+                $pageCfg5['filePathRelUnderscore'] | Should -Be "$( $pageCfg5['nameCompat'] )"
+                Split-Path $pageCfg5['fullfilepathwithoutextension'] -Leaf | Should -Be  "$( $pageCfg5['nameCompat'] )"
+                Split-Path $pageCfg5['fullfilepathwithoutextension'] -Parent | Should -Be $pageCfg5['fullexportdirpath']
+                $pageCfg5['levelsPrefix']| Should -Be "$( '../' * ($pageCfg5['levelsFromRoot'] + 1 - 1) )"
             }
         }
 
@@ -785,8 +855,8 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
 
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
 
             foreach ($pageCfg in $result) {
                 $pageCfg['mediaParentPath'] | Should -Be $pageCfg['notesBaseDirectory']
@@ -796,8 +866,8 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
 
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
 
             foreach ($pageCfg in $result) {
                 $pageCfg['mediaParentPath'] | Should -Be $pageCfg['fullexportdirpath']
@@ -809,8 +879,8 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
 
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
 
             foreach ($pageCfg in $result) {
                 $fakeMarkdownContent = ''
@@ -837,8 +907,8 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
 
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
 
             foreach ($pageCfg in $result) {
                 $fakeMarkdownContent = ''
@@ -862,8 +932,8 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
 
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
 
             foreach ($pageCfg in $result) {
                 $fakeMarkdownContent = @"
@@ -893,8 +963,8 @@ hello world $( [char]0x00A0 )
 
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
 
             foreach ($pageCfg in $result) {
                 $fakeMarkdownContent = @"
@@ -928,8 +998,8 @@ hello world $( [char]0x00A0 )
 
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
 
             foreach ($pageCfg in $result) {
                 $fakeMarkdownContent = @"
@@ -954,8 +1024,8 @@ foo\bar
 
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            # 9 pages from 'test' notebook, 9 pages from 'test2' notebook
-            $result.Count | Should -Be 18
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 30
 
             foreach ($pageCfg in $result) {
                 $fakeMarkdownContent = @"

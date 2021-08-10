@@ -571,27 +571,31 @@ Function New-SectionGroupConversionConfig {
                     6 { 'markdown_strict' }
                     default { 'markdown' }
                 }
-                $pageCfg['pagePrefix'] = switch ($pageCfg['pageLevel']) {
-                    # process for subpage prefixes
-                    1 {
+                $pageCfg['pagePrefix'] = & {
+                    if ($pageCfg['pageLevel'] -eq 1) {
                         ''
-                    }
-                    2 {
+                    }else {
                         if ($previousPage) {
-                            "$( $previousPage['filePathRel'] )$( [io.path]::DirectorySeparatorChar )"
+                            if ($previousPage['pageLevel'] -lt $pageCfg['pageLevel']) {
+                                # 1 -> 2, 1 -> 3, or 2 -> 3
+                                "$( $previousPage['filePathRel'] )$( [io.path]::DirectorySeparatorChar )"
+                            }elseif ($previousPage['pageLevel'] -eq $pageCfg['pageLevel']) {
+                                # 2 -> 2, or 3 -> 3
+                                "$( Split-Path $previousPage['filePathRel'] -Parent )$( [io.path]::DirectorySeparatorChar )"
+                            }else {
+                                # 3 -> 2
+                                $previousLevel1Page = @(
+                                    $sectionCfg['pages'] | Where-Object { $_['pageLevel'] }
+                                )
+                                if ($previousLevel1Page.Count -gt 0) {
+                                    "$( Split-Path (Split-Path $previousPage['filePathRel'] -Parent) -Parent )$( [io.path]::DirectorySeparatorChar )"
+                                }else {
+                                    ''
+                                }
+                            }
                         }else {
                             ''
                         }
-                    }
-                    3 {
-                        if ($previousPage) {
-                            "$( $previousPage['filePathRel'] )$( [io.path]::DirectorySeparatorChar )"
-                        }else {
-                            ''
-                        }
-                    }
-                    default {
-                        ''
                     }
                 }
                 $pageCfg['filePathRel'] = & {
