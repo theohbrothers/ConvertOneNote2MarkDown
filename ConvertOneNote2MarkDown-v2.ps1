@@ -522,236 +522,251 @@ Function New-SectionGroupConversionConfig {
 
         # Build this Section Group's sections
         $cfg['sections'] = [System.Collections.ArrayList]@()
-        foreach ($section in $sectionGroup.Section) {
-            "$( '#' * ($LevelsFromRoot + 1) ) Building conversion configuration for $( $section.name ) [Section]" | Write-Host -ForegroundColor DarkGray
 
-            $sectionCfg = [ordered]@{}
-            $sectionCfg['notesBaseDirectory'] = $cfg['notesBaseDirectory']
-            $sectionCfg['notesDirectory'] = $cfg['notesDirectory']
-            $sectionCfg['sectionGroupUri'] = $cfg['uri'] # Keep a reference to mt Section Group Configuration object's uri
-            $sectionCfg['sectionGroupName'] = $cfg['object'].name
-            $sectionCfg['object'] = $section # Keep a reference to the Section object
-            $sectionCfg['kind'] = 'Section'
-            $sectionCfg['nameCompat'] = $section.name | Remove-InvalidFileNameChars
-            $sectionCfg['levelsFromRoot'] = $cfg['levelsFromRoot'] + 1
-            $sectionCfg['pathFromRoot'] = "$( $cfg['pathFromRoot'] )$( [io.path]::DirectorySeparatorChar )$( $sectionCfg['nameCompat'] )".Trim([io.path]::DirectorySeparatorChar)
-            $sectionCfg['pathFromRootCompat'] = $sectionCfg['pathFromRoot'] | Remove-InvalidFileNameChars
-            $sectionCfg['uri'] = $section.path # E.g. https://d.docs.live.net/0123456789abcdef/Skydrive Notebooks/mynotebook/mysectiongroup/mysection
-            $sectionCfg['lastModifiedTime'] = [Datetime]::ParseExact($section.lastModifiedTime, 'yyyy-MM-ddTHH:mm:ss.fffZ', $null)
-            $sectionCfg['pages'] = [System.Collections.ArrayList]@()
+        if (! (Get-Member -InputObject $sectionGroup -Name 'Section') -and ! (Get-Member -InputObject $sectionGroup -Name 'SectionGroup') ) {
+            "Ignoring empty Section Group: $( $cfg['pathFromRoot'] )" | Write-Host -ForegroundColor DarkGray
+        }
 
-            # Build Section's pages
-            foreach ($page in $section.Page) {
-                "$( '#' * ($LevelsFromRoot + 2) ) Building conversion configuration for $( $page.name ) [Page]" | Write-Host -ForegroundColor DarkGray
+        if (Get-Member -InputObject $sectionGroup -Name 'Section') {
+            foreach ($section in $sectionGroup.Section) {
+                "$( '#' * ($LevelsFromRoot + 1) ) Building conversion configuration for $( $section.name ) [Section]" | Write-Host -ForegroundColor DarkGray
 
-                $previousPage = if ($sectionCfg['pages'].Count -gt 0) { $sectionCfg['pages'][$sectionCfg['pages'].Count - 1] } else { $null }
-                $pageCfg = [ordered]@{}
-                $pageCfg['notesBaseDirectory'] = $cfg['notesBaseDirectory']
-                $pageCfg['notesDirectory'] = $cfg['notesDirectory']
-                $pageCfg['sectionGroupUri'] = $cfg['uri'] # Keep a reference to mt Section Group Configuration object's uri
-                $pageCfg['sectionGroupName'] = $cfg['object'].name
-                $pageCfg['sectionUri'] = $sectionCfg['uri'] # Keep a reference to my Section Configuration object's uri
-                $pageCfg['sectionName'] = $sectionCfg['object'].name
-                $pageCfg['object'] = $page # Keep a reference to my Page object
-                $pageCfg['kind'] = 'Page'
-                $pageCfg['nameCompat'] = $page.name | Remove-InvalidFileNameChars
-                $pageCfg['levelsFromRoot'] = $sectionCfg['levelsFromRoot']
-                $pageCfg['pathFromRoot'] = "$( $sectionCfg['pathFromRoot'] )$( [io.path]::DirectorySeparatorChar )$( $pageCfg['nameCompat'] )"
-                $pageCfg['pathFromRootCompat'] = $pageCfg['pathFromRoot'] | Remove-InvalidFileNameChars
-                $pageCfg['uri'] = "$( $sectionCfg['object'].path )/$( $page.name )" # There's no $page.path property, so we generate one. E.g. https://d.docs.live.net/0123456789abcdef/Skydrive Notebooks/mynotebook/mysectiongroup/mysection/mypage
-                $pageCfg['dateTime'] = [Datetime]::ParseExact($page.dateTime, 'yyyy-MM-ddTHH:mm:ss.fffZ', $null)
-                $pageCfg['lastModifiedTime'] = [Datetime]::ParseExact($page.lastModifiedTime, 'yyyy-MM-ddTHH:mm:ss.fffZ', $null)
-                $pageCfg['pageLevel'] = $page.pageLevel -as [int]
-                $pageCfg['converter'] = switch ($config['conversion']['value']) {
-                    1 { 'markdown' }
-                    2 { 'commonmark' }
-                    3 { 'gfm' }
-                    4 { 'markdown_mmd' }
-                    5 { 'markdown_phpextra' }
-                    6 { 'markdown_strict' }
-                    default { 'markdown' }
-                }
-                $pageCfg['pagePrefix'] = & {
-                    if ($pageCfg['pageLevel'] -eq 1) {
-                        ''
-                    }else {
-                        if ($previousPage) {
-                            if ($previousPage['pageLevel'] -lt $pageCfg['pageLevel']) {
-                                # 1 -> 2, 1 -> 3, or 2 -> 3
-                                "$( $previousPage['filePathRel'] )$( [io.path]::DirectorySeparatorChar )"
-                            }elseif ($previousPage['pageLevel'] -eq $pageCfg['pageLevel']) {
-                                # 2 -> 2, or 3 -> 3
-                                "$( Split-Path $previousPage['filePathRel'] -Parent )$( [io.path]::DirectorySeparatorChar )"
+                $sectionCfg = [ordered]@{}
+                $sectionCfg['notesBaseDirectory'] = $cfg['notesBaseDirectory']
+                $sectionCfg['notesDirectory'] = $cfg['notesDirectory']
+                $sectionCfg['sectionGroupUri'] = $cfg['uri'] # Keep a reference to mt Section Group Configuration object's uri
+                $sectionCfg['sectionGroupName'] = $cfg['object'].name
+                $sectionCfg['object'] = $section # Keep a reference to the Section object
+                $sectionCfg['kind'] = 'Section'
+                $sectionCfg['nameCompat'] = $section.name | Remove-InvalidFileNameChars
+                $sectionCfg['levelsFromRoot'] = $cfg['levelsFromRoot'] + 1
+                $sectionCfg['pathFromRoot'] = "$( $cfg['pathFromRoot'] )$( [io.path]::DirectorySeparatorChar )$( $sectionCfg['nameCompat'] )".Trim([io.path]::DirectorySeparatorChar)
+                $sectionCfg['pathFromRootCompat'] = $sectionCfg['pathFromRoot'] | Remove-InvalidFileNameChars
+                $sectionCfg['uri'] = $section.path # E.g. https://d.docs.live.net/0123456789abcdef/Skydrive Notebooks/mynotebook/mysectiongroup/mysection
+                $sectionCfg['lastModifiedTime'] = [Datetime]::ParseExact($section.lastModifiedTime, 'yyyy-MM-ddTHH:mm:ss.fffZ', $null)
+                $sectionCfg['pages'] = [System.Collections.ArrayList]@()
+
+                # Build Section's pages
+                if (Get-Member -InputObject $section -Name 'Page') {
+                    foreach ($page in $section.Page) {
+                        "$( '#' * ($LevelsFromRoot + 2) ) Building conversion configuration for $( $page.name ) [Page]" | Write-Host -ForegroundColor DarkGray
+
+                        $previousPage = if ($sectionCfg['pages'].Count -gt 0) { $sectionCfg['pages'][$sectionCfg['pages'].Count - 1] } else { $null }
+                        $pageCfg = [ordered]@{}
+                        $pageCfg['notesBaseDirectory'] = $cfg['notesBaseDirectory']
+                        $pageCfg['notesDirectory'] = $cfg['notesDirectory']
+                        $pageCfg['sectionGroupUri'] = $cfg['uri'] # Keep a reference to mt Section Group Configuration object's uri
+                        $pageCfg['sectionGroupName'] = $cfg['object'].name
+                        $pageCfg['sectionUri'] = $sectionCfg['uri'] # Keep a reference to my Section Configuration object's uri
+                        $pageCfg['sectionName'] = $sectionCfg['object'].name
+                        $pageCfg['object'] = $page # Keep a reference to my Page object
+                        $pageCfg['kind'] = 'Page'
+                        $pageCfg['nameCompat'] = $page.name | Remove-InvalidFileNameChars
+                        $pageCfg['levelsFromRoot'] = $sectionCfg['levelsFromRoot']
+                        $pageCfg['pathFromRoot'] = "$( $sectionCfg['pathFromRoot'] )$( [io.path]::DirectorySeparatorChar )$( $pageCfg['nameCompat'] )"
+                        $pageCfg['pathFromRootCompat'] = $pageCfg['pathFromRoot'] | Remove-InvalidFileNameChars
+                        $pageCfg['uri'] = "$( $sectionCfg['object'].path )/$( $page.name )" # There's no $page.path property, so we generate one. E.g. https://d.docs.live.net/0123456789abcdef/Skydrive Notebooks/mynotebook/mysectiongroup/mysection/mypage
+                        $pageCfg['dateTime'] = [Datetime]::ParseExact($page.dateTime, 'yyyy-MM-ddTHH:mm:ss.fffZ', $null)
+                        $pageCfg['lastModifiedTime'] = [Datetime]::ParseExact($page.lastModifiedTime, 'yyyy-MM-ddTHH:mm:ss.fffZ', $null)
+                        $pageCfg['pageLevel'] = $page.pageLevel -as [int]
+                        $pageCfg['converter'] = switch ($config['conversion']['value']) {
+                            1 { 'markdown' }
+                            2 { 'commonmark' }
+                            3 { 'gfm' }
+                            4 { 'markdown_mmd' }
+                            5 { 'markdown_phpextra' }
+                            6 { 'markdown_strict' }
+                            default { 'markdown' }
+                        }
+                        $pageCfg['pagePrefix'] = & {
+                            if ($pageCfg['pageLevel'] -eq 1) {
+                                ''
                             }else {
-                                # 3 -> 2
-                                $previousLevel1Page = @(
-                                    $sectionCfg['pages'] | Where-Object { $_['pageLevel'] }
-                                )
-                                if ($previousLevel1Page.Count -gt 0) {
-                                    "$( Split-Path (Split-Path $previousPage['filePathRel'] -Parent) -Parent )$( [io.path]::DirectorySeparatorChar )"
+                                if ($previousPage) {
+                                    if ($previousPage['pageLevel'] -lt $pageCfg['pageLevel']) {
+                                        # 1 -> 2, 1 -> 3, or 2 -> 3
+                                        "$( $previousPage['filePathRel'] )$( [io.path]::DirectorySeparatorChar )"
+                                    }elseif ($previousPage['pageLevel'] -eq $pageCfg['pageLevel']) {
+                                        # 2 -> 2, or 3 -> 3
+                                        "$( Split-Path $previousPage['filePathRel'] -Parent )$( [io.path]::DirectorySeparatorChar )"
+                                    }else {
+                                        # 3 -> 2
+                                        $previousLevel1Page = @(
+                                            $sectionCfg['pages'] | Where-Object { $_['pageLevel'] }
+                                        )
+                                        if ($previousLevel1Page.Count -gt 0) {
+                                            "$( Split-Path (Split-Path $previousPage['filePathRel'] -Parent) -Parent )$( [io.path]::DirectorySeparatorChar )"
+                                        }else {
+                                            ''
+                                        }
+                                    }
                                 }else {
                                     ''
                                 }
                             }
+                        }
+                        $pageCfg['filePathRel'] = & {
+                            $filePathRel = "$( $pageCfg['pagePrefix'] )$( $pageCfg['nameCompat'] )"
+
+                            # in case multiple pages with the same name exist in a section, postfix the filename
+                            $recurrence = 0
+                            foreach ($p in $sectionCfg['pages']) {
+                                if ($p['pagePrefix'] -eq $pageCfg['pagePrefix'] -and $p['pathFromRoot'] -eq $pageCfg['pathFromRoot']) {
+                                    $recurrence++
+                                }
+                            }
+                            if ($recurrence -gt 0) {
+                                $filePathRel = "$filePathRel-$recurrence"
+                            }
+                            $filePathRel
+                        }
+                        $pageCfg['filePathRelUnderscore'] = $pageCfg['filePathRel'].Replace( [io.path]::DirectorySeparatorChar, '_' )
+                        $pageCfg['fullfilepathwithoutextension'] = if ($config['prefixFolders']['value'] -eq 2) {
+                            [io.path]::combine( $cfg['notesDirectory'], $sectionCfg['nameCompat'], $pageCfg['filePathRelUnderscore'] )
                         }else {
+                            [io.path]::combine( $cfg['notesDirectory'], $sectionCfg['nameCompat'], $pageCfg['filePathRel'] )
+                        }
+                        $pageCfg['fullexportdirpath'] = Split-Path $pageCfg['fullfilepathwithoutextension'] -Parent
+                        $pageCfg['mdFileName'] = Split-Path $pageCfg['fullfilepathwithoutextension'] -Leaf
+                        $pageCfg['levelsPrefix'] = if ($config['medialocation']['value'] -eq 2) {
                             ''
-                        }
-                    }
-                }
-                $pageCfg['filePathRel'] = & {
-                    $filePathRel = "$( $pageCfg['pagePrefix'] )$( $pageCfg['nameCompat'] )"
-
-                    # in case multiple pages with the same name exist in a section, postfix the filename
-                    $recurrence = 0
-                    foreach ($p in $sectionCfg['pages']) {
-                        if ($p['pagePrefix'] -eq $pageCfg['pagePrefix'] -and $p['pathFromRoot'] -eq $pageCfg['pathFromRoot']) {
-                            $recurrence++
-                        }
-                    }
-                    if ($recurrence -gt 0) {
-                        $filePathRel = "$filePathRel-$recurrence"
-                    }
-                    $filePathRel
-                }
-                $pageCfg['filePathRelUnderscore'] = $pageCfg['filePathRel'].Replace( [io.path]::DirectorySeparatorChar, '_' )
-                $pageCfg['fullfilepathwithoutextension'] = if ($config['prefixFolders']['value'] -eq 2) {
-                    [io.path]::combine( $cfg['notesDirectory'], $sectionCfg['nameCompat'], $pageCfg['filePathRelUnderscore'] )
-                }else {
-                    [io.path]::combine( $cfg['notesDirectory'], $sectionCfg['nameCompat'], $pageCfg['filePathRel'] )
-                }
-                $pageCfg['fullexportdirpath'] = Split-Path $pageCfg['fullfilepathwithoutextension'] -Parent
-                $pageCfg['mdFileName'] = Split-Path $pageCfg['fullfilepathwithoutextension'] -Leaf
-                $pageCfg['levelsPrefix'] = if ($config['medialocation']['value'] -eq 2) {
-                    ''
-                }else {
-                    if ($config['prefixFolders']['value'] -eq 2) {
-                        "$( '../' * ($pageCfg['levelsFromRoot'] + 1 - 1) )"
-                    }else {
-                        "$( '../' * ($pageCfg['levelsFromRoot'] + $pageCfg['pageLevel'] - 1) )"
-                    }
-                }
-                $pageCfg['mediaParentPath'] = if ($config['medialocation']['value'] -eq 2) {
-                    $pageCfg['fullexportdirpath']
-                }else {
-                    $cfg['notesBaseDirectory']
-                }
-                $pageCfg['mediaPath'] = [io.path]::combine( $pageCfg['mediaParentPath'], 'media' )
-                $pageCfg['mediaParentPath'] = Split-Path $pageCfg['mediaPath'] -Parent
-                $pageCfg['mediaPathPandoc'] = $pageCfg['mediaPath'].Replace( [io.path]::DirectorySeparatorChar, '/' ) # Pandoc outputs paths in markdown with with front slahes after the supplied <mediaPath>, e.g. '<mediaPath>/media/image.png'. So let's use a front-slashed supplied mediaPath
-                $pageCfg['mediaParentPathPandoc'] = (Split-Path $pageCfg['mediaPathPandoc'] -Parent).Replace( [io.path]::DirectorySeparatorChar, '/' ) # Pandoc outputs paths in markdown with with front slahes after the supplied <mediaPath>, e.g. '<mediaPath>/media/image.png'. So let's use a front-slashed supplied mediaPath
-                $pageCfg['fullexportpath'] = [io.path]::combine( $cfg['notesDocxDirectory'], "$( $pageCfg['pathFromRootCompat'] ).docx" )
-                $pageCfg['insertedAttachments'] = @(
-                    & {
-                        $pagexml = Get-OneNotePageContent -OneNoteConnection $OneNoteConnection -PageId $pageCfg['object'].ID
-
-                        # Get any attachment(s) found in pages
-                        if (Get-Member -InputObject $pagexml.Page -Name 'Outline') {
-                            $insertedFiles = $pagexml.Page.Outline.OEChildren.OE | Where-Object { $null -ne $_ -and (Get-Member -InputObject $_ -Name 'InsertedFile') } | ForEach-Object { $_.InsertedFile }
-                            foreach ($i in $insertedFiles) {
-                                $attachmentCfg = [ordered]@{}
-                                $attachmentCfg['object'] =  $i
-                                $attachmentCfg['nameCompat'] =  $i.preferredName | Remove-InvalidFileNameCharsInsertedFiles
-                                $attachmentCfg['markdownFileName'] =  $attachmentCfg['nameCompat'].Replace("$", "\$").Replace("^", "\^").Replace("'", "\'")
-                                $attachmentCfg['source'] =  $i.pathCache
-                                $attachmentCfg['destination'] =  [io.path]::combine( $pageCfg['mediaPath'], $attachmentCfg['nameCompat'] )
-
-                                $attachmentCfg
+                        }else {
+                            if ($config['prefixFolders']['value'] -eq 2) {
+                                "$( '../' * ($pageCfg['levelsFromRoot'] + 1 - 1) )"
+                            }else {
+                                "$( '../' * ($pageCfg['levelsFromRoot'] + $pageCfg['pageLevel'] - 1) )"
                             }
                         }
-                    }
-                )
-                $pageCfg['mutations'] = @(
-                    # Markdown mutations
-
-                    foreach ($attachmentCfg in $pageCfg['insertedAttachments']) {
-                        @{
-                            description = 'Change inserted attachment(s) filename references'
-                            replacements = @(
-                                @{
-                                    searchRegex = [regex]::Escape( $attachmentCfg['object'].preferredName )
-                                    replacement = "[$( $attachmentCfg['markdownFileName'] )]($( $pageCfg['mediaPathPandoc'] )/$( $attachmentCfg['markdownFileName'] ))"
-                                }
-                            )
+                        $pageCfg['mediaParentPath'] = if ($config['medialocation']['value'] -eq 2) {
+                            $pageCfg['fullexportdirpath']
+                        }else {
+                            $cfg['notesBaseDirectory']
                         }
-                    }
-                    @{
-                        description = 'Replace media (e.g. images, attachments) absolute paths with relative paths'
-                        replacements = @(
-                            @{
-                                # E.g. 'C:/temp/notes/mynotebook/media/somepage-image1-timestamp.jpg' -> '../media/somepage-image1-timestamp.jpg'
-                                searchRegex = [regex]::Escape("$( $pageCfg['mediaParentPathPandoc'] )/") # Add a trailing front slash
-                                replacement = $pageCfg['levelsPrefix']
-                            }
-                        )
-                    }
-                    @{
-                        description = 'Add heading'
-                        replacements = @(
-                            @{
-                                searchRegex = '^[^\r\n]*'
-                                replacement = & {
-                                    $heading = "# $( $pageCfg['object'].name )"
-                                    if ($config['headerTimestampEnabled']['value'] -eq 1) {
-                                        $heading += $pageCfg['dateTime'].ToString("`n`nyyyy-MM-dd HH:mm:ss")
-                                        $heading += "`r`n`r`n---`r`n"
+                        $pageCfg['mediaPath'] = [io.path]::combine( $pageCfg['mediaParentPath'], 'media' )
+                        $pageCfg['mediaParentPath'] = Split-Path $pageCfg['mediaPath'] -Parent
+                        $pageCfg['mediaPathPandoc'] = $pageCfg['mediaPath'].Replace( [io.path]::DirectorySeparatorChar, '/' ) # Pandoc outputs paths in markdown with with front slahes after the supplied <mediaPath>, e.g. '<mediaPath>/media/image.png'. So let's use a front-slashed supplied mediaPath
+                        $pageCfg['mediaParentPathPandoc'] = (Split-Path $pageCfg['mediaPathPandoc'] -Parent).Replace( [io.path]::DirectorySeparatorChar, '/' ) # Pandoc outputs paths in markdown with with front slahes after the supplied <mediaPath>, e.g. '<mediaPath>/media/image.png'. So let's use a front-slashed supplied mediaPath
+                        $pageCfg['fullexportpath'] = [io.path]::combine( $cfg['notesDocxDirectory'], "$( $pageCfg['pathFromRootCompat'] ).docx" )
+                        $pageCfg['insertedAttachments'] = @(
+                            & {
+                                $pagexml = Get-OneNotePageContent -OneNoteConnection $OneNoteConnection -PageId $pageCfg['object'].ID
+
+                                # Get any attachment(s) found in pages
+                                if (Get-Member -InputObject $pagexml -Name 'Page') {
+                                    if (Get-Member -InputObject $pagexml.Page -Name 'Outline') {
+                                        $insertedFiles = $pagexml.Page.Outline.OEChildren.OE | Where-Object { $null -ne $_ -and (Get-Member -InputObject $_ -Name 'InsertedFile') } | ForEach-Object { $_.InsertedFile }
+                                        foreach ($i in $insertedFiles) {
+                                            $attachmentCfg = [ordered]@{}
+                                            $attachmentCfg['object'] =  $i
+                                            $attachmentCfg['nameCompat'] =  $i.preferredName | Remove-InvalidFileNameCharsInsertedFiles
+                                            $attachmentCfg['markdownFileName'] =  $attachmentCfg['nameCompat'].Replace("$", "\$").Replace("^", "\^").Replace("'", "\'")
+                                            $attachmentCfg['source'] =  $i.pathCache
+                                            $attachmentCfg['destination'] =  [io.path]::combine( $pageCfg['mediaPath'], $attachmentCfg['nameCompat'] )
+
+                                            $attachmentCfg
+                                        }
                                     }
-                                    $heading
                                 }
                             }
                         )
-                    }
-                    if ($config['keepspaces']['value'] -eq 1 ) {
-                        @{
-                            description = 'Clear double spaces from bullets and non-breaking spaces spaces from blank lines'
-                            replacements = @(
+                        $pageCfg['mutations'] = @(
+                            # Markdown mutations. Each search and replace is done against a string containing the entire markdown content
+
+                            foreach ($attachmentCfg in $pageCfg['insertedAttachments']) {
                                 @{
-                                    searchRegex = [regex]::Escape([char]0x00A0)
-                                    replacement = ''
+                                    description = 'Change inserted attachment(s) filename references'
+                                    replacements = @(
+                                        @{
+                                            searchRegex = [regex]::Escape( $attachmentCfg['object'].preferredName )
+                                            replacement = "[$( $attachmentCfg['markdownFileName'] )]($( $pageCfg['mediaPathPandoc'] )/$( $attachmentCfg['markdownFileName'] ))"
+                                        }
+                                    )
                                 }
+                            }
+                            @{
+                                description = 'Replace media (e.g. images, attachments) absolute paths with relative paths'
+                                replacements = @(
+                                    @{
+                                        # E.g. 'C:/temp/notes/mynotebook/media/somepage-image1-timestamp.jpg' -> '../media/somepage-image1-timestamp.jpg'
+                                        searchRegex = [regex]::Escape("$( $pageCfg['mediaParentPathPandoc'] )/") # Add a trailing front slash
+                                        replacement = $pageCfg['levelsPrefix']
+                                    }
+                                )
+                            }
+                            @{
+                                description = 'Add heading'
+                                replacements = @(
+                                    @{
+                                        searchRegex = '^[^\r\n]*'
+                                        replacement = & {
+                                            $heading = "# $( $pageCfg['object'].name )"
+                                            if ($config['headerTimestampEnabled']['value'] -eq 1) {
+                                                $heading += $pageCfg['dateTime'].ToString("`n`nyyyy-MM-dd HH:mm:ss")
+                                                $heading += "`n`n---`n"
+                                            }
+                                            $heading
+                                        }
+                                    }
+                                )
+                            }
+                            if ($config['keepspaces']['value'] -eq 1 ) {
                                 @{
-                                    searchRegex = '\r?\n\r?\n- '
-                                    replacement = "`r`n- "
+                                    description = 'Clear double spaces from bullets and non-breaking spaces spaces from blank lines'
+                                    replacements = @(
+                                        @{
+                                            searchRegex = [regex]::Escape([char]0x00A0)
+                                            replacement = ''
+                                        }
+                                        @{
+                                            searchRegex = '\r*\n\r*\n- '
+                                            replacement = "`n- "
+                                        }
+                                    )
                                 }
-                            )
+                            }
+                            if ($config['keepescape']['value'] -eq 1) {
+                                @{
+                                    description = 'Clear backslash escape symbols'
+                                    replacements = @(
+                                        @{
+                                            searchRegex = [regex]::Escape('\')
+                                            replacement = ''
+                                        }
+                                    )
+                                }
+                            }
+                        )
+                        $pageCfg['directoriesToCreate'] = @(
+                            # The directories to be created
+                            @(
+                                $cfg['notesDocxDirectory']
+                                $cfg['notesDirectory']
+                                $pageCfg['fullexportdirpath']
+                                $pageCfg['mediaPath']
+                            ) | Select-Object -Unique
+                        )
+                        $pageCfg['directorySeparatorChar'] = [io.path]::DirectorySeparatorChar
+
+                        # Populate the pages array (needed even when -AsArray switch is not on, because we need this section's pages' state to know whether there are duplicate page names)
+                        $sectionCfg['pages'].Add( $pageCfg ) > $null
+
+                        if (!$AsArray) {
+                            # Send the configuration immediately down the pipeline
+                            $pageCfg
                         }
                     }
-                    if ($config['keepescape']['value'] -eq 1) {
-                        @{
-                            description = 'Clear backslash escape symbols'
-                            replacements = @(
-                                @{
-                                    searchRegex = [regex]::Escape('\')
-                                    replacement = ''
-                                }
-                            )
-                        }
-                    }
-                )
-                $pageCfg['directoriesToCreate'] = @(
-                    # The directories to be created
-                    @(
-                        $cfg['notesDocxDirectory']
-                        $cfg['notesDirectory']
-                        $pageCfg['fullexportdirpath']
-                        $pageCfg['mediaPath']
-                    ) | Select-Object -Unique
-                )
-                $pageCfg['directorySeparatorChar'] = [io.path]::DirectorySeparatorChar
-
-                # Populate the pages array (needed even when -AsArray switch is not on, because we need this section's pages' state to know whether there are duplicate page names)
-                $sectionCfg['pages'].Add( $pageCfg ) > $null
-
-                if (!$AsArray) {
-                    # Send the configuration immediately down the pipeline
-                    $pageCfg
+                }else {
+                    "Ignoring empty Section: $( $sectionCfg['pathFromRoot'] )" | Write-Host -ForegroundColor DarkGray
                 }
-            }
 
-            # Populate the sections array
-            if ($AsArray) {
-                $cfg['sections'].Add( $sectionCfg ) > $null
+                # Populate the sections array
+                if ($AsArray) {
+                    $cfg['sections'].Add( $sectionCfg ) > $null
+                }
             }
         }
+
+        $cfg['sectionGroups'] = [System.Collections.ArrayList]@()
 
         # Build this Section Group's Section Groups
         if ((Get-Member -InputObject $sectionGroup -Name 'SectionGroup')) {

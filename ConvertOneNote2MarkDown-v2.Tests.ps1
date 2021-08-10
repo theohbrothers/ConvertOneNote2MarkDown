@@ -358,6 +358,27 @@ Describe "New-OneNoteConnection" -Tag 'Unit' {
     }
 
 }
+
+function Get-FakeOneNoteHierarchyWithEmptySectionGroupsAndSectionsAndPages {
+    # Sample outerXML of a hierarchy object. Here we have two identical notebooks: 'test' and 'test2' with a simple nested structure, each with 9 pages, in groups of 3:
+    # 1) Section is empty, in the notebook base
+    # 2) Section Group is empty, in the notebook base
+    $hierarchy = @'
+<?xml version="1.0"?>
+<one:Notebooks xmlns:one="http://schemas.microsoft.com/office/onenote/2013/onenote">
+    <one:Notebook name="test" nickname="test" ID="{38E47DAB-211E-4EC1-85F1-129656A9D2CE}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/" lastModifiedTime="2021-08-06T16:27:58.000Z" color="#ADE792">
+        <one:Section name="s0" ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/s0.one" lastModifiedTime="2021-08-06T16:08:25.000Z" color="#8AA8E4">
+        </one:Section>
+        <one:SectionGroup name="OneNote_RecycleBin" ID="{1298D961-43A6-46E4-81FC-B4FD9F87755C}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/OneNote_RecycleBin/" lastModifiedTime="2021-08-06T16:27:58.000Z" isRecycleBin="true">
+        </one:SectionGroup>
+        <one:SectionGroup name="g0" ID="{9570CCF6-17C2-4DCE-83A0-F58AE8914E29}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/g9/" lastModifiedTime="2021-08-06T15:49:20.000Z">
+        </one:SectionGroup>
+    </one:Notebook>
+</one:Notebooks>
+'@ -as [xml]
+    $hierarchy
+}
+
 function Get-FakeOneNoteHierarchy {
     # Sample outerXML of a hierarchy object. Here we have two identical notebooks: 'test' and 'test2' with a simple nested structure, each with 9 pages, in groups of 3:
     # 1) The 1st, 2nd, 3rd, 4th, 5th in the notebook base
@@ -639,7 +660,15 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
             }
         }
 
-        It "Should constructs individual conversion configuration(s) for pages, based on a given Section Group XML object. Ignores pages in recycle bin." {
+        It "Should ignore empty Section Groups and Section(s)" {
+            $fakeHierarchy = Get-FakeOneNoteHierarchyWithEmptySectionGroupsAndSectionsAndPages
+            $params['SectionGroups'] = $fakeHierarchy.Notebooks.Notebook
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+            $result.Count | Should -Be 0
+        }
+
+        It "Should construct individual conversion configuration(s) for pages, based on a given Section Group XML object. Ignores pages in recycle bin." {
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
             # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
