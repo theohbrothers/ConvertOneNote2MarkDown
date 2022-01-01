@@ -906,7 +906,7 @@ Function New-SectionGroupConversionConfig {
                                 description = 'Add heading'
                                 replacements = @(
                                     @{
-                                        searchRegex = '^[^\r\n]*'
+                                        searchRegex = '^\s*'
                                         replacement = & {
                                             $heading = "# $( $pageCfg['object'].name )"
                                             if ($config['headerTimestampEnabled']['value'] -eq 1) {
