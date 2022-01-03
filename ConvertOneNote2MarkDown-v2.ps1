@@ -931,8 +931,8 @@ Function New-SectionGroupConversionConfig {
                                         }
                                         # Remove a newline between each occurrence of '- some list item'
                                         @{
-                                            searchRegex = '\r*\n\r*\n- '
-                                            replacement = "`n- "
+                                            searchRegex = '\r*\n\r*\n(\s*)- '
+                                            replacement = "`n`$1- "
                                         }
                                         # Remove all '>' occurrences immediately following bullet lists
                                         @{
