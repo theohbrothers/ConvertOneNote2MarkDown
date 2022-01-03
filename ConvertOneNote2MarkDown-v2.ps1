@@ -864,18 +864,22 @@ Function New-SectionGroupConversionConfig {
 
                                 # Get any attachment(s) found in pages
                                 if (Get-Member -InputObject $pagexml -Name 'Page') {
-                                    if (Get-Member -InputObject $pagexml.Page -Name 'Outline') {
-                                        $insertedFiles = $pagexml.Page.Outline.OEChildren.OE | Where-Object { $null -ne $_ -and (Get-Member -InputObject $_ -Name 'InsertedFile') } | ForEach-Object { $_.InsertedFile }
-                                        foreach ($i in $insertedFiles) {
-                                            $attachmentCfg = [ordered]@{}
-                                            $attachmentCfg['object'] =  $i
-                                            $attachmentCfg['nameCompat'] =  $i.preferredName | Remove-InvalidFileNameCharsInsertedFiles
-                                            $attachmentCfg['markdownFileName'] =  $attachmentCfg['nameCompat'] | Encode-Markdown -Uri
-                                            $attachmentCfg['source'] =  $i.pathCache
-                                            $attachmentCfg['destination'] =  [io.path]::combine( $pageCfg['mediaPath'], $attachmentCfg['nameCompat'] )
+                                    $insertedFiles = @()
+                                    $insertedFiles += if (Get-Member -InputObject $pagexml.Page -Name 'Outline') {
+                                        $pagexml.Page.Outline.OEChildren.OE | Where-Object { $null -ne $_ -and (Get-Member -InputObject $_ -Name 'InsertedFile') } | ForEach-Object { $_.InsertedFile }
+                                    }
+                                    $insertedFiles += if (Get-Member -InputObject $pagexml.Page -Name 'InsertedFile') {
+                                        $pagexml.Page.InsertedFile
+                                    }
+                                    foreach ($i in $insertedFiles) {
+                                        $attachmentCfg = [ordered]@{}
+                                        $attachmentCfg['object'] =  $i
+                                        $attachmentCfg['nameCompat'] =  $i.preferredName | Remove-InvalidFileNameCharsInsertedFiles
+                                        $attachmentCfg['markdownFileName'] =  $attachmentCfg['nameCompat'] | Encode-Markdown -Uri
+                                        $attachmentCfg['source'] =  $i.pathCache
+                                        $attachmentCfg['destination'] =  [io.path]::combine( $pageCfg['mediaPath'], $attachmentCfg['nameCompat'] )
 
-                                            $attachmentCfg
-                                        }
+                                        $attachmentCfg
                                     }
                                 }
                             }
