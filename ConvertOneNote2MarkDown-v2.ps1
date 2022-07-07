@@ -864,13 +864,14 @@ Function New-SectionGroupConversionConfig {
 
                                 # Get any attachment(s) found in pages
                                 if (Get-Member -InputObject $pagexml -Name 'Page') {
-                                    $insertedFiles = @()
-                                    $insertedFiles += if (Get-Member -InputObject $pagexml.Page -Name 'Outline') {
-                                        $pagexml.Page.Outline.OEChildren.OE | Where-Object { $null -ne $_ -and (Get-Member -InputObject $_ -Name 'InsertedFile') } | ForEach-Object { $_.InsertedFile }
-                                    }
-                                    $insertedFiles += if (Get-Member -InputObject $pagexml.Page -Name 'InsertedFile') {
-                                        $pagexml.Page.InsertedFile
-                                    }
+                                    $insertedFiles = @(
+                                        if (Get-Member -InputObject $pagexml.Page -Name 'Outline') {
+                                            $pagexml.Page.Outline.OEChildren.OE | Where-Object { $null -ne $_ -and (Get-Member -InputObject $_ -Name 'InsertedFile') } | ForEach-Object { $_.InsertedFile }
+                                        }
+                                        if (Get-Member -InputObject $pagexml.Page -Name 'InsertedFile') {
+                                            $pagexml.Page.InsertedFile
+                                        }
+                                    )
                                     foreach ($i in $insertedFiles) {
                                         $attachmentCfg = [ordered]@{}
                                         $attachmentCfg['object'] =  $i
