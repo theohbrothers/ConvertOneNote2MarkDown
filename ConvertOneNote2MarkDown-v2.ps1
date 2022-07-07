@@ -862,26 +862,19 @@ Function New-SectionGroupConversionConfig {
                             & {
                                 $pagexml = Get-OneNotePageContent -OneNoteConnection $OneNoteConnection -PageId $pageCfg['object'].ID
 
-                                # Get any attachment(s) found in pages
-                                if (Get-Member -InputObject $pagexml -Name 'Page') {
-                                    $insertedFiles = @(
-                                        if (Get-Member -InputObject $pagexml.Page -Name 'Outline') {
-                                            $pagexml.Page.Outline.OEChildren.OE | Where-Object { $null -ne $_ -and (Get-Member -InputObject $_ -Name 'InsertedFile') } | ForEach-Object { $_.InsertedFile }
-                                        }
-                                        if (Get-Member -InputObject $pagexml.Page -Name 'InsertedFile') {
-                                            $pagexml.Page.InsertedFile
-                                        }
-                                    )
-                                    foreach ($i in $insertedFiles) {
-                                        $attachmentCfg = [ordered]@{}
-                                        $attachmentCfg['object'] =  $i
-                                        $attachmentCfg['nameCompat'] =  $i.preferredName | Remove-InvalidFileNameCharsInsertedFiles
-                                        $attachmentCfg['markdownFileName'] =  $attachmentCfg['nameCompat'] | Encode-Markdown -Uri
-                                        $attachmentCfg['source'] =  $i.pathCache
-                                        $attachmentCfg['destination'] =  [io.path]::combine( $pageCfg['mediaPath'], $attachmentCfg['nameCompat'] )
+                                # Search recursively for all attachment(s). This includes attachments nested in tables etc.
+                                $ns = new-object Xml.XmlNamespaceManager $pagexml.NameTable
+                                $ns.AddNamespace("one", $pagexml.DocumentElement.NamespaceURI)
+                                $insertedFiles = $pagexml.SelectNodes("//one:InsertedFile", $ns)
+                                foreach ($i in $insertedFiles) {
+                                    $attachmentCfg = [ordered]@{}
+                                    $attachmentCfg['object'] =  $i
+                                    $attachmentCfg['nameCompat'] =  $i.preferredName | Remove-InvalidFileNameCharsInsertedFiles
+                                    $attachmentCfg['markdownFileName'] =  $attachmentCfg['nameCompat'] | Encode-Markdown -Uri
+                                    $attachmentCfg['source'] =  $i.pathCache
+                                    $attachmentCfg['destination'] =  [io.path]::combine( $pageCfg['mediaPath'], $attachmentCfg['nameCompat'] )
 
-                                        $attachmentCfg
-                                    }
+                                    $attachmentCfg
                                 }
                             }
                         )
