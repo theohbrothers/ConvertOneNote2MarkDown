@@ -709,6 +709,7 @@ AAAAAElFTkSuQmCC</one:Data>
                 <one:InsertedFile selected="all" pathCache="C:\Users\LeonardJonathan\AppData\Local\Microsoft\OneNote\16.0\cache\00001BNS.bin" pathSource="C:\Users\LeonardJonathan\Desktop\attachment2[something in brackets].txt" preferredName="attachment2(something in brackets).txt" />
             </one:OE>
         </one:OEChildren>
+        <one:InsertedFile selected="all" pathCache="C:\Users\LeonardJonathan\AppData\Local\Microsoft\OneNote\16.0\cache\00001BNS.bin" pathSource="C:\Users\LeonardJonathan\Desktop\attachment2[something in brackets].txt" preferredName="attachment2(something in brackets).txt" />
     </one:Outline>
 </one:Page>
 '@ -as [xml]
