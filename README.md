@@ -1,7 +1,5 @@
 # Convert OneNote to MarkDown
 
-123
-
 [![github-actions](https://github.com/theohbrothers/ConvertOneNote2MarkDown/workflows/ci-master-pr/badge.svg)](https://github.com/theohbrothers/ConvertOneNote2MarkDown/actions)
 [![github-release](https://img.shields.io/github/v/release/theohbrothers/ConvertOneNote2MarkDown?style=flat-square)](https://github.com/theohbrothers/ConvertOneNote2MarkDown/releases/)
 
