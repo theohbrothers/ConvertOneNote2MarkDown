@@ -1116,7 +1116,6 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
             $result.Count | Should -Be 48
 
             foreach ($pageCfg in $result) {
-                # The first line will be replaced by page header (8 lines)
                 $fakeMarkdownContent = ''
 
                 # Mutate
@@ -1177,9 +1176,7 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
             # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
             $result.Count | Should -Be 48
 
-            # The first line will be replaced by page header (8 lines)
             $fakeMarkdownContent = @"
-
 hello world$( [char]0x00A0 )
 - foo
 
@@ -1205,7 +1202,7 @@ hello world$( [char]0x00A0 )
 
                 # Should remove newlines between bullets, and remove non-breaking spaces. Ignore first 8 lines for page header
                 $split = $mutated -split "`n"
-                $expectedBody = $split[8..($split.Count - 1)] -join "`n"
+                $expectedBody = $split[7..($split.Count - 1)] -join "`n"
                 $expectedBody | Should -Be $( @"
 hello world
 - foo
@@ -1237,7 +1234,7 @@ some other text
 
                 # Should keep newlines between bullets, and keep non-breaking spaces. Ignore first 8 lines for page header
                 $split = $mutated -split "`n"
-                $expectedBody = $split[8..($split.Count - 1)] -join "`n"
+                $expectedBody = $split[7..($split.Count - 1)] -join "`n"
                 $expectedBody | Should -Be $( @"
 hello world$( [char]0x00A0 )
 - foo
@@ -1265,9 +1262,7 @@ hello world$( [char]0x00A0 )
             $result.Count | Should -Be 48
 
             foreach ($pageCfg in $result) {
-                # The first line will be replaced by page header (8 lines)
                 $fakeMarkdownContent = @"
-
 hello\$\^\\\*\_\[\]world
 foo\bar\0
 "@
@@ -1281,9 +1276,9 @@ foo\bar\0
 
                 # Should remove all backslashes. Ignore first 8 lines for page header
                 $fakeMarkdownContent = $fakeMarkdownContent -split "`n"
-                $fakeMarkdownContent.Count | Should -Be 10
-                $fakeMarkdownContent[8] | Should -Be 'hello$^*_[]world'
-                $fakeMarkdownContent[9] | Should -Be 'foobar0'
+                $fakeMarkdownContent.Count | Should -Be 9
+                $fakeMarkdownContent[7] | Should -Be 'hello$^*_[]world'
+                $fakeMarkdownContent[8] | Should -Be 'foobar0'
             }
             $params['Config']['keepescape']['value'] = 2
 
@@ -1293,9 +1288,7 @@ foo\bar\0
             $result.Count | Should -Be 48
 
             foreach ($pageCfg in $result) {
-                # The first line will be replaced by page header (8 lines)
                 $fakeMarkdownContent = @'
-
 hello\$\^\\\*\_\[\]world
 foo\bar\0
 '@
@@ -1309,9 +1302,9 @@ foo\bar\0
 
                 # Should remove backslashes that precede non-alphanumeric characters. Ignore first 8 lines for page header
                 $fakeMarkdownContent = $fakeMarkdownContent -split "`n"
-                $fakeMarkdownContent.Count | Should -Be 10
-                $fakeMarkdownContent[8] | Should -Be 'hello$^\*_[]world'
-                $fakeMarkdownContent[9] | Should -Be 'foo\bar\0'
+                $fakeMarkdownContent.Count | Should -Be 9
+                $fakeMarkdownContent[7] | Should -Be 'hello$^\*_[]world'
+                $fakeMarkdownContent[8] | Should -Be 'foo\bar\0'
             }
 
             $params['Config']['keepescape']['value'] = 3
@@ -1322,9 +1315,7 @@ foo\bar\0
             $result.Count | Should -Be 48
 
             foreach ($pageCfg in $result) {
-                # The first line will be replaced by page header (8 lines)
                 $fakeMarkdownContent = @'
-
 hello\$\^\\\*\_\[\]world
 foo\bar\0
 '@
@@ -1338,9 +1329,9 @@ foo\bar\0
 
                 # Should keep backslashes. Ignore first 8 lines for page header
                 $fakeMarkdownContent = $fakeMarkdownContent -split "`n"
-                $fakeMarkdownContent.Count | Should -Be 10
-                $fakeMarkdownContent[8] | Should -Be 'hello\$\^\\\*\_\[\]world'
-                $fakeMarkdownContent[9] | Should -Be 'foo\bar\0'
+                $fakeMarkdownContent.Count | Should -Be 9
+                $fakeMarkdownContent[7] | Should -Be 'hello\$\^\\\*\_\[\]world'
+                $fakeMarkdownContent[8] | Should -Be 'foo\bar\0'
             }
         }
 
@@ -1353,9 +1344,7 @@ foo\bar\0
             $result.Count | Should -Be 48
 
             foreach ($pageCfg in $result) {
-                # The first line will be replaced by page header (8 lines)
                 $fakeMarkdownContent = @"
-
 foo`r`nbar`r`nbaz
 "@
 
@@ -1368,10 +1357,10 @@ foo`r`nbar`r`nbaz
 
                 # Should remove CRs. Ignore first 8 lines for page header
                 $fakeMarkdownContent = $fakeMarkdownContent -split "`n"
-                $fakeMarkdownContent.Count | Should -Be 11
-                $fakeMarkdownContent[8] | Should -Match '^foo$'
-                $fakeMarkdownContent[9] | Should -Match '^bar$'
-                $fakeMarkdownContent[10] | Should -Match '^baz$'`
+                $fakeMarkdownContent.Count | Should -Be 10
+                $fakeMarkdownContent[7] | Should -Match '^foo$'
+                $fakeMarkdownContent[8] | Should -Match '^bar$'
+                $fakeMarkdownContent[9] | Should -Match '^baz$'`
             }
 
             $params['Config']['newlineCharacter']['value'] = 2
@@ -1382,9 +1371,7 @@ foo`r`nbar`r`nbaz
             $result.Count | Should -Be 48
 
             foreach ($pageCfg in $result) {
-                # The first line will be replaced by page header (8 lines)
                $fakeMarkdownContent = @"
-
 foo`r`nbar`r`nbaz
 "@
                 # Mutate
@@ -1396,10 +1383,10 @@ foo`r`nbar`r`nbaz
 
                 # Should retain CRs. Ignore first 8 lines for page header
                 $fakeMarkdownContent = $fakeMarkdownContent -split "`n"
-                $fakeMarkdownContent.Count | Should -Be 11
-                $fakeMarkdownContent[8] | Should -Match "^foo`r$"
-                $fakeMarkdownContent[9] | Should -Match "^bar`r$"
-                $fakeMarkdownContent[10] | Should -Match "^baz$"
+                $fakeMarkdownContent.Count | Should -Be 10
+                $fakeMarkdownContent[7] | Should -Match "^foo`r$"
+                $fakeMarkdownContent[8] | Should -Match "^bar`r$"
+                $fakeMarkdownContent[9] | Should -Match "^baz$"
             }
         }
 
