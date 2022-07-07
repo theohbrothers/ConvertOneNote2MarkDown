@@ -709,8 +709,9 @@ AAAAAElFTkSuQmCC</one:Data>
                 <one:InsertedFile selected="all" pathCache="C:\Users\LeonardJonathan\AppData\Local\Microsoft\OneNote\16.0\cache\00001BNS.bin" pathSource="C:\Users\LeonardJonathan\Desktop\attachment2[something in brackets].txt" preferredName="attachment2(something in brackets).txt" />
             </one:OE>
         </one:OEChildren>
-        <one:InsertedFile selected="all" pathCache="C:\Users\LeonardJonathan\AppData\Local\Microsoft\OneNote\16.0\cache\00001BNS.bin" pathSource="C:\Users\LeonardJonathan\Desktop\attachment2[something in brackets].txt" preferredName="attachment2(something in brackets).txt" />
     </one:Outline>
+    <one:InsertedFile selected="all" pathCache="C:\Users\LeonardJonathan\AppData\Local\Microsoft\OneNote\16.0\cache\00001BNS.bin" pathSource="C:\Users\LeonardJonathan\Desktop\attachment3.txt" preferredName="attachment3.txt" />
+    <one:InsertedFile selected="all" pathCache="C:\Users\LeonardJonathan\AppData\Local\Microsoft\OneNote\16.0\cache\00001BNS.bin" pathSource="C:\Users\LeonardJonathan\Desktop\attachment4.txt" preferredName="attachment4.txt" />
 </one:Page>
 '@ -as [xml]
     $page
@@ -801,10 +802,12 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
             $result.Count | Should -Be 48
 
             foreach ($pageCfg in $result) {
-                $pageCfg['insertedAttachments'].Count | Should -Be 2
+                $pageCfg['insertedAttachments'].Count | Should -Be 4
 
                 $pageCfg['insertedAttachments'][0]['markdownFileName'] | Should -Be 'attachment1\(something-in-brackets\).txt'
                 $pageCfg['insertedAttachments'][1]['markdownFileName'] | Should -Be 'attachment2\(something-in-brackets\).txt'
+                $pageCfg['insertedAttachments'][2]['markdownFileName'] | Should -Be 'attachment3.txt'
+                $pageCfg['insertedAttachments'][3]['markdownFileName'] | Should -Be 'attachment4.txt'
             }
         }
 
