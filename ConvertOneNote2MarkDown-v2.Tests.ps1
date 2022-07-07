@@ -1179,7 +1179,11 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
 hello world$( [char]0x00A0 )
 - foo
 
+  - foo1
+
 - bar
+
+  - bar1
 
 >
 >
@@ -1201,7 +1205,9 @@ hello world$( [char]0x00A0 )
                 $expectedBody | Should -Be $( @"
 hello world
 - foo
+  - foo1
 - bar
+  - bar1
 
 
 
@@ -1232,7 +1238,11 @@ some other text
 hello world$( [char]0x00A0 )
 - foo
 
+  - foo1
+
 - bar
+
+  - bar1
 
 >
 >
