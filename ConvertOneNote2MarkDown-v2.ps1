@@ -849,7 +849,8 @@ Function New-SectionGroupConversionConfig {
                         $pageCfg['tmpPath'] = & {
                             $dateNs = Get-Date -Format "yyyy-MM-dd-HH-mm-ss-fffffff"
                             if ($env:OS -match 'windows') {
-                                [io.path]::combine($env:TEMP, $cfg['notebookName'], $dateNs)
+                                # Ensure $env:TEMP is not MSDOS 8.3 shortened name, but the actual full path. See: https://superuser.com/questions/1524767/powershell-uses-the-short-8-3-form-for-envtemp
+                                [io.path]::combine((Get-Item $env:TEMP).FullName, $cfg['notebookName'], $dateNs)
                             }else {
                                 [io.path]::combine('/tmp', $cfg['notebookName'], $dateNs)
                             }
