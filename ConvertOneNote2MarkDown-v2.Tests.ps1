@@ -76,10 +76,21 @@ $newlineCharacter = 1
 
         It "Compiles configuration from interactive prompts: cast input as expected type, and fallback on default values on empty input" {
             $fakeUserInputs = Get-DefaultConfiguration
+            $fakeUserInputs['dryRun']['value'] = '' # Should fallback on default value
             $fakeUserInputs['notesdestpath']['value'] = 'c:\foo\bar' # Should be intact
-            $fakeUserInputs['targetNotebook']['value'] = $null # Should fallback on default value
-            $fakeUserInputs['usedocx']['value'] = '1' # Should be casted to an int
+            $fakeUserInputs['targetNotebook']['value'] = '' # Should fallback on default value
+            $fakeUserInputs['usedocx']['value'] = '0' # Should be casted to an int
             $fakeUserInputs['keepdocx']['value'] = $null # Should fallback on default value
+            $fakeUserInputs['docxNamingConvention']['value'] = '' # Should fallback on default value ...
+            $fakeUserInputs['prefixFolders']['value'] = ''
+            $fakeUserInputs['mdFileNameAndFolderNameMaxLength']['value'] = ''
+            $fakeUserInputs['medialocation']['value'] = ''
+            $fakeUserInputs['conversion']['value'] = ''
+            $fakeUserInputs['headerTimestampEnabled']['value'] = ''
+            $fakeUserInputs['keepspaces']['value'] = ''
+            $fakeUserInputs['keepescape']['value'] = ''
+            $fakeUserInputs['newlineCharacter']['value'] = ''
+            $fakeUserInputs['exportPdf']['value'] = ''
             Mock Test-Path { $false }
             Mock Read-Host {
                 $typeName = [Microsoft.PowerShell.ToStringCodeMethods]::Type($config[$key]['default'].GetType())

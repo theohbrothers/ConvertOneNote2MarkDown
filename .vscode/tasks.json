@@ -7,25 +7,19 @@
             "label": "Test (pwsh)",
             "type": "shell",
             "command": "pwsh -Command test/test.ps1",
-            "group": {
-                "isDefault": true,
-                "kind": "test"
-            }
+            "group": "build",
         },
         {
             "label": "Test (powershell)",
             "type": "shell",
             "command": "powershell -Command test/test.ps1",
-            "group": {
-                "isDefault": true,
-                "kind": "test"
-            }
+            "group": "build",
         },
         {
             "label": "Generate config.example.ps1",
             "type": "shell",
             "command": "pwsh -Command '. ./ConvertOneNote2MarkDown-v2.ps1 -Exit; New-ConfigurationFile'",
-            "group": "build"
+            "group": "build",
         },
         {
             "label": "Convert",
