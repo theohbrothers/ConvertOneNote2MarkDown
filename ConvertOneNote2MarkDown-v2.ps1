@@ -72,6 +72,16 @@ Whether to create new word .docx or reuse existing ones
             value = 1
             validateRange = 1,2
         }
+        skipIfExists = @{
+            description = @'
+Whether to skip converting a page if the resulting Markdown file already exists
+1: Do not skip - Overwrite existing files (Default)
+2: Skip already converted pages (Great for resuming crashed runs)
+'@
+            default = 1
+            value = 1
+            validateRange = 1,2
+        }
         keepdocx = @{
             description = @'
 Whether to discard word .docx after conversion
@@ -186,6 +196,16 @@ Whether to use Line Feed (LF) or Carriage Return + Line Feed (CRLF) for new line
 Whether to include a PDF export alongside the markdown file
 1: Don't include PDF - Default
 2: Include PDF
+'@
+            default = 1
+            value = 1
+            validateRange = 1,2
+        }
+        failedPagesExport = @{
+            description = @'
+Whether to export a JSON file listing pages that failed conversion
+1: Don't export (Default)
+2: Export automatically next to the notebook's 'docx' folder as 'conversion-failures.jsonl' (for resuming; safe to delete after successful retry)
 '@
             default = 1
             value = 1
@@ -628,6 +648,259 @@ Function Publish-OneNotePage {
     $OneNoteConnection.Publish($PageId, $Destination, $PublishFormat, "")
 }
 
+Function Get-PageInsertedAttachments {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [object]
+        $OneNoteConnection
+    ,
+        [Parameter(Mandatory)]
+        [object]
+        $PageCfg
+    )
+
+    $pagexml = Get-OneNotePageContent -OneNoteConnection $OneNoteConnection -PageId $PageCfg['object'].ID
+
+    $ns = New-Object Xml.XmlNamespaceManager $pagexml.NameTable
+    $ns.AddNamespace('one', $pagexml.DocumentElement.NamespaceURI)
+    $insertedFiles = $pagexml.SelectNodes('//one:InsertedFile', $ns)
+    $attachments = [System.Collections.ArrayList]@()
+    foreach ($i in $insertedFiles) {
+        $attachmentCfg = [ordered]@{}
+        $attachmentCfg['object'] = $i
+        $attachmentCfg['nameCompat'] = $i.preferredName | Remove-InvalidFileNameCharsInsertedFiles
+        $attachmentCfg['markdownFileName'] = $attachmentCfg['nameCompat'] | Encode-Markdown -Uri
+        $attachmentCfg['source'] = $i.pathCache
+        $attachmentCfg['destination'] = [io.path]::combine( $PageCfg['mediaPath'], $attachmentCfg['nameCompat'] )
+        $attachments.Add( $attachmentCfg ) > $null
+    }
+    @($attachments.ToArray())
+}
+
+Function New-PageMutations {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [object]
+        $PageCfg
+    ,
+        [Parameter(Mandatory)]
+        [object]
+        $Config
+    ,
+        [Parameter()]
+        [array]
+        $InsertedAttachments = @()
+    )
+
+    $mutations = [System.Collections.ArrayList]@()
+
+    $attachmentList = @()
+    if ($InsertedAttachments) {
+        if ($InsertedAttachments -is [System.Collections.IDictionary] -and $InsertedAttachments.Contains('markdownFileName')) {
+            $attachmentList = @($InsertedAttachments)
+        }else {
+            $attachmentList = @($InsertedAttachments)
+        }
+    }
+    foreach ($attachmentCfg in $attachmentList) {
+        $mutations.Add( @{
+            description = 'Change inserted attachment(s) filename references'
+            replacements = @(
+                @{
+                    searchRegex = [regex]::Escape( $attachmentCfg['object'].preferredName )
+                    replacement = "[$( $attachmentCfg['markdownFileName'] )]($( $PageCfg['mediaPathPandoc'] )/$( $attachmentCfg['markdownFileName'] ))"
+                }
+            )
+        } ) > $null
+    }
+
+    $mutations.Add( @{
+        description = 'Replace media (e.g. images, attachments) absolute paths with relative paths'
+        replacements = @(
+            @{
+                searchRegex = [regex]::Escape("$( $PageCfg['mediaParentPathPandoc'] )/")
+                replacement = $PageCfg['levelsPrefix']
+            }
+        )
+    } ) > $null
+
+    $mutations.Add( @{
+        description = 'Add heading'
+        replacements = @(
+            @{
+                searchRegex = '^\s*'
+                replacement = & {
+                    $heading = "# $( $PageCfg['object'].name )"
+                    if ($Config['headerTimestampEnabled']['value'] -eq 1) {
+                        $heading += "`n`nCreated: $( $PageCfg['dateTime'].ToString('yyyy-MM-dd HH:mm:ss zz00') )"
+                        $heading += "`n`nModified: $( $PageCfg['lastModifiedTime'].ToString('yyyy-MM-dd HH:mm:ss zz00') )"
+                        $heading += "`n`n---`n`n"
+                    }
+                    $heading
+                }
+            }
+        )
+    } ) > $null
+
+    if ($Config['keepspaces']['value'] -eq 1 ) {
+        $mutations.Add( @{
+            description = 'Clear extra newlines between unordered (bullet) and ordered (numbered) list items, non-breaking spaces from blank lines, and `>` after unordered lists'
+            replacements = @(
+                @{
+                    searchRegex = [regex]::Escape([char]0x00A0)
+                    replacement = ''
+                }
+                @{
+                    searchRegex = '(\s*)- ([^\r\n]*)\r*\n\r*\n(?=\s*-)'
+                    replacement = "`$1- `$2`n"
+                }
+                @{
+                    searchRegex = '(\s*)(\d+\.) ([^\r\n]*)\r*\n\r*\n(?=\s*\d+\.)'
+                    replacement = "`$1`$2 `$3`n"
+                }
+                @{
+                    searchRegex = '\n>[ ]*'
+                    replacement = "`n"
+                }
+            )
+        } ) > $null
+    }
+    if ($Config['keepescape']['value'] -eq 1) {
+        $mutations.Add( @{
+            description = "Clear all '\' characters"
+            replacements = @(
+                @{
+                    searchRegex = [regex]::Escape('\')
+                    replacement = ''
+                }
+            )
+        } ) > $null
+    }
+    elseif ($Config['keepescape']['value'] -eq 2) {
+        $mutations.Add( @{
+            description = "Clear all '\' characters except those preceding alphanumeric characters"
+            replacements = @(
+                @{
+                    searchRegex = '\\([^A-Za-z0-9])'
+                    replacement = '$1'
+                }
+            )
+        } ) > $null
+    }
+    if ($Config['newlineCharacter']['value'] -eq 1) {
+        $mutations.Add( @{
+            description = 'Use LF for newlines'
+            replacements = @(
+                @{
+                    searchRegex = '\r*\n'
+                    replacement = "`n"
+                }
+            )
+        } ) > $null
+    }else {
+        $mutations.Add( @{
+            description = 'Use CRLF for newlines'
+            replacements = @(
+                @{
+                    searchRegex = '\r*\n'
+                    replacement = "`r`n"
+                }
+            )
+        } ) > $null
+    }
+
+    @($mutations.ToArray())
+}
+
+Function Add-ConversionFailureRecord {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [object]
+        $Config
+    ,
+        [Parameter(Mandatory)]
+        [object]
+        $PageCfg
+    ,
+        [Parameter()]
+        $ErrorRecord
+    )
+
+    if ($Config['failedPagesExport']['value'] -ne 2) {
+        return
+    }
+    if (-not (Get-Variable -Name ConversionFailureRecords -Scope Script -ErrorAction SilentlyContinue)) {
+        $script:ConversionFailureRecords = [System.Collections.ArrayList]@()
+    }
+    $hresult = $null
+    if ($ErrorRecord.Exception -and $ErrorRecord.Exception.HResult) {
+        $hresult = '0x{0:X}' -f ($ErrorRecord.Exception.HResult -band 0xFFFFFFFF)
+    }
+    $record = [ordered]@{
+        pageId = $PageCfg['id']
+        pageName = $PageCfg['object'].name
+        pathFromRoot = $PageCfg['pathFromRoot']
+        filePathNormal = $PageCfg['filePathNormal']
+        docxExportFilePath = $PageCfg['docxExportFilePath']
+        notesBaseDirectory = $PageCfg['notesBaseDirectory']
+        uri = $PageCfg['uri']
+        failedAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+        message = if ($ErrorRecord) { $ErrorRecord.Exception.Message } else { '' }
+        hresult = $hresult
+        summary = "$( $PageCfg['pathFromRoot'] ) | $( $hresult ) | $( if ($ErrorRecord) { $ErrorRecord.Exception.Message } else { '' } )"
+    }
+    $script:ConversionFailureRecords.Add( $record ) > $null
+
+    # Persist failures as they happen so crash/restart still leaves a usable log.
+    if ($Config['failedPagesExport']['value'] -eq 2 -and $PageCfg['notesBaseDirectory']) {
+        try {
+            $autoPath = [io.path]::Combine($PageCfg['notesBaseDirectory'], 'conversion-failures.jsonl')
+            ($record | ConvertTo-Json -Depth 10 -Compress) | Out-File -LiteralPath $autoPath -Encoding utf8 -Append
+        }catch {
+            # Don't let logging failures break conversion
+        }
+    }
+}
+
+Function Export-ConversionFailureRecords {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [object]
+        $Config
+    )
+
+    if ($Config['failedPagesExport']['value'] -ne 2) {
+        return
+    }
+    if (-not (Get-Variable -Name ConversionFailureRecords -Scope Script -ErrorAction SilentlyContinue)) {
+        return
+    }
+    if ($script:ConversionFailureRecords.Count -eq 0) {
+        return
+    }
+
+    # Failures were already appended to per-notebook jsonl during the run; summarize paths here.
+    $groups = @(
+        $script:ConversionFailureRecords |
+            Where-Object { $_.notesBaseDirectory } |
+            Group-Object -Property notesBaseDirectory
+    )
+    if ($groups.Count -eq 0) {
+        return
+    }
+
+    "`nConversion failures ($( $script:ConversionFailureRecords.Count ) page(s)):" | Write-Host -ForegroundColor Cyan
+    foreach ($g in $groups) {
+        $autoPath = [io.path]::Combine($g.Name, 'conversion-failures.jsonl')
+        "  $autoPath ($( $g.Count ) page(s))" | Write-Host -ForegroundColor Cyan
+    }
+    "Re-run with skipIfExists=2 to continue. Delete conversion-failures.jsonl when conversion is complete." | Write-Host -ForegroundColor DarkGray
+}
+
 Function New-SectionGroupConversionConfig {
     [CmdletBinding()]
     param (
@@ -733,8 +1006,6 @@ Function New-SectionGroupConversionConfig {
                 # Build Section's pages
                 if (Get-Member -InputObject $section -Name 'Page') {
                     foreach ($page in $section.Page) {
-                        "$( '#' * ($LevelsFromRoot + 2) ) Building conversion configuration for $( $page.name ) [Page]" | Write-Host -ForegroundColor DarkGray
-
                         $previousPage = if ($sectionCfg['pages'].Count -gt 0) { $sectionCfg['pages'][$sectionCfg['pages'].Count - 1] } else { $null }
                         $pageCfg = [ordered]@{}
                         $pageCfg['notebookName'] = $cfg['notebookName']
@@ -868,140 +1139,9 @@ Function New-SectionGroupConversionConfig {
                         }else {
                             [io.path]::combine( $cfg['notesDocxDirectory'], "$( $pageCfg['pathFromRootCompat'] ).docx" )
                         }
-                        $pageCfg['insertedAttachments'] = @(
-                            & {
-                                $pagexml = Get-OneNotePageContent -OneNoteConnection $OneNoteConnection -PageId $pageCfg['object'].ID
-
-                                # Search recursively for all attachment(s). This includes attachments nested in tables etc.
-                                $ns = new-object Xml.XmlNamespaceManager $pagexml.NameTable
-                                $ns.AddNamespace("one", $pagexml.DocumentElement.NamespaceURI)
-                                $insertedFiles = $pagexml.SelectNodes("//one:InsertedFile", $ns)
-                                foreach ($i in $insertedFiles) {
-                                    $attachmentCfg = [ordered]@{}
-                                    $attachmentCfg['object'] =  $i
-                                    $attachmentCfg['nameCompat'] =  $i.preferredName | Remove-InvalidFileNameCharsInsertedFiles
-                                    $attachmentCfg['markdownFileName'] =  $attachmentCfg['nameCompat'] | Encode-Markdown -Uri
-                                    $attachmentCfg['source'] =  $i.pathCache
-                                    $attachmentCfg['destination'] =  [io.path]::combine( $pageCfg['mediaPath'], $attachmentCfg['nameCompat'] )
-
-                                    $attachmentCfg
-                                }
-                            }
-                        )
-                        $pageCfg['mutations'] = @(
-                            # Markdown mutations. Each search and replace is done against a string containing the entire markdown content
-
-                            foreach ($attachmentCfg in $pageCfg['insertedAttachments']) {
-                                @{
-                                    description = 'Change inserted attachment(s) filename references'
-                                    replacements = @(
-                                        @{
-                                            searchRegex = [regex]::Escape( $attachmentCfg['object'].preferredName )
-                                            replacement = "[$( $attachmentCfg['markdownFileName'] )]($( $pageCfg['mediaPathPandoc'] )/$( $attachmentCfg['markdownFileName'] ))"
-                                        }
-                                    )
-                                }
-                            }
-                            @{
-                                description = 'Replace media (e.g. images, attachments) absolute paths with relative paths'
-                                replacements = @(
-                                    @{
-                                        # E.g. 'C:/temp/notes/mynotebook/media/somepage-image1-timestamp.jpg' -> '../media/somepage-image1-timestamp.jpg'
-                                        searchRegex = [regex]::Escape("$( $pageCfg['mediaParentPathPandoc'] )/") # Add a trailing front slash
-                                        replacement = $pageCfg['levelsPrefix']
-                                    }
-                                )
-                            }
-                            @{
-                                description = 'Add heading'
-                                replacements = @(
-                                    @{
-                                        searchRegex = '^\s*'
-                                        replacement = & {
-                                            $heading = "# $( $pageCfg['object'].name )"
-                                            if ($config['headerTimestampEnabled']['value'] -eq 1) {
-                                                $heading += "`n`nCreated: $(  $pageCfg['dateTime'].ToString('yyyy-MM-dd HH:mm:ss zz00') )"
-                                                $heading += "`n`nModified: $(  $pageCfg['lastModifiedTime'].ToString('yyyy-MM-dd HH:mm:ss zz00') )"
-                                                $heading += "`n`n---`n`n"
-                                            }
-                                            $heading
-                                        }
-                                    }
-                                )
-                            }
-                            if ($config['keepspaces']['value'] -eq 1 ) {
-                                @{
-                                    description = 'Clear extra newlines between unordered (bullet) and ordered (numbered) list items, non-breaking spaces from blank lines, and `>` after unordered lists'
-                                    replacements = @(
-                                        # Remove non-breaking spaces
-                                        @{
-                                            searchRegex = [regex]::Escape([char]0x00A0)
-                                            replacement = ''
-                                        }
-                                        # Remove an extra newline between each occurrence of '- some unordered list item'
-                                        @{
-                                            searchRegex = '(\s*)- ([^\r\n]*)\r*\n\r*\n(?=\s*-)'
-                                            replacement = "`$1- `$2`n"
-                                        }
-                                        # Remove an extra newline between each occurrence of '1. some ordered list item'
-                                        @{
-                                            searchRegex = '(\s*)(\d+\.) ([^\r\n]*)\r*\n\r*\n(?=\s*\d+\.)'
-                                            replacement = "`$1`$2 `$3`n"
-                                        }
-                                        # Remove all '>' occurrences immediately following unordered lists
-                                        @{
-                                            searchRegex = '\n>[ ]*'
-                                            replacement = "`n"
-                                        }
-                                    )
-                                }
-                            }
-                            if ($config['keepescape']['value'] -eq 1) {
-                                @{
-                                    description = "Clear all '\' characters"
-                                    replacements = @(
-                                        @{
-                                            searchRegex = [regex]::Escape('\')
-                                            replacement = ''
-                                        }
-                                    )
-                                }
-                            }
-                            elseif ($config['keepescape']['value'] -eq 2) {
-                                @{
-                                    description = "Clear all '\' characters except those preceding alphanumeric characters"
-                                    replacements = @(
-                                        @{
-                                            searchRegex = '\\([^A-Za-z0-9])'
-                                            replacement = '$1'
-                                        }
-                                    )
-                                }
-                            }
-                            & {
-                                if ($config['newlineCharacter']['value'] -eq 1) {
-                                    @{
-                                        description = "Use LF for newlines"
-                                        replacements = @(
-                                            @{
-                                                searchRegex = '\r*\n'
-                                                replacement = "`n"
-                                            }
-                                        )
-                                    }
-                                }else {
-                                    @{
-                                        description = "Use CRLF for newlines"
-                                        replacements = @(
-                                            @{
-                                                searchRegex = '\r*\n'
-                                                replacement = "`r`n"
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        )
+                        "$( '#' * ($LevelsFromRoot + 2) ) Building conversion configuration for $( $page.name ) [Page]" | Write-Host -ForegroundColor DarkGray
+                        $pageCfg['insertedAttachments'] = @()
+                        $pageCfg['mutations'] = @( New-PageMutations -PageCfg $pageCfg -Config $config -InsertedAttachments @() )
                         $pageCfg['directoriesToCreate'] = @(
                             # The directories to be created. These directories should never hit the absolute path, file name, or directory name limits on Windows
                             @(
@@ -1095,6 +1235,16 @@ Function Convert-OneNotePage {
 
         try {
             $pageCfg = $ConversionConfig
+
+            if ($config['skipIfExists']['value'] -eq 2) {
+                if (Test-Path -LiteralPath $pageCfg['filePath']) {
+                    "Skipping already converted page: $( $pageCfg['object'].name ) -> $( $pageCfg['filePathNormal'] )" | Write-Host -ForegroundColor Yellow
+                    return
+                }
+            }
+
+            $pageCfg['insertedAttachments'] = @( Get-PageInsertedAttachments -OneNoteConnection $OneNoteConnection -PageCfg $pageCfg )
+            $pageCfg['mutations'] = @( New-PageMutations -PageCfg $pageCfg -Config $config -InsertedAttachments $pageCfg['insertedAttachments'] )
 
             "$( '#' * ($pageCfg['levelsFromRoot'] + $pageCfg['pageLevel']) ) $( $pageCfg['object'].name ) [$( $pageCfg['kind'] )]" | Write-Host
             "Uri: $( $pageCfg['uri'] )" | Write-Verbose
@@ -1306,6 +1456,7 @@ Function Convert-OneNotePage {
 
             "Markdown file ready: $( $pageCfg['filePathNormal'] )" | Write-Host -ForegroundColor Green
         }catch {
+            Add-ConversionFailureRecord -Config $config -PageCfg $pageCfg -ErrorRecord $_
             Write-Error "Failed to convert page: $( $pageCfg['pathFromRoot'] )" -ErrorAction Continue
             if ($ErrorActionPreference -eq 'Stop') {
                 throw
@@ -1393,6 +1544,7 @@ Function Convert-OneNote2MarkDown {
         $PSDefaultParameterValues['*:Encoding'] = 'utf8'
 
         $totalerr = @()
+        $script:ConversionFailureRecords = [System.Collections.ArrayList]@()
 
         # Validate dependencies
         Validate-Dependencies
@@ -1442,6 +1594,8 @@ Function Convert-OneNote2MarkDown {
             "`nExporting Page Conversion Configuration as JSON file with $( $pageConversionConfigsAll.Count ) objects: $ConversionConfigurationExportPath" | Write-Host -ForegroundColor Cyan
             $pageConversionConfigsAll | ConvertTo-Json -Depth 100 | Out-File $ConversionConfigurationExportPath -Encoding utf8 -Force
         }
+
+        Export-ConversionFailureRecords -Config $config
     }catch {
         if ($ErrorActionPreference -eq 'Stop') {
             throw

@@ -34,6 +34,7 @@ The powershell script `ConvertOneNote2MarkDown-v2.ps1` will utilize the OneNote 
 * Choose whether to use Line Feed (`LF`) or Carriage Return + Line Feed (`CRLF`) for new lines
 * Choose whether to include a `.pdf` export alongside the `.md` file. `.md` does not preserve `InkDrawing` (i.e. overlayed drawings, highlights, pen marks) absolute positions within a page, but a `.pdf` export is a complete page snapshot that preserves `InkDrawing` absolute positions within a page.
 * Detailed logs. Run the script with `-Verbose` to see detailed logs of each page's conversion.
+* **Resume after crashes**: Skip pages that already have a `.md` file (`$skipIfExists = 2`) and export failures (`$failedPagesExport = 2`) so you can re-run until everything converts.
 
 ## Known Issues
 
@@ -137,6 +138,19 @@ The powershell script `ConvertOneNote2MarkDown-v2.ps1` will utilize the OneNote 
 The script will log any errors encountered during and at the end of its run, so please review, fix and run again if needed.
 
 If you are satisfied check the results with a markdown editor like VSCode. All images should popup just right in the Preview Pane for Markdown files.
+
+### Resuming after a crash or RPC errors
+
+1. In `config.ps1`, set `$skipIfExists = 2` so pages that already have a `.md` file are not converted again.
+2. Set `$failedPagesExport = 2`. Failed pages are appended to `conversion-failures.jsonl` next to the notebook's `docx` folder during the run (so it still exists even if the run crashes). Each JSON line includes a short `summary` field for easier reading. Re-run with `$skipIfExists = 2` to continue; delete the jsonl file when conversion is complete.
+3. Fix the underlying issue (restart OneNote, see [FAQ](#faq)), then rerun with only the failures:
+
+    ```powershell
+    # config.ps1: $skipIfExists = 2
+    .\ConvertOneNote2MarkDown-v2.ps1
+    ```
+
+By default the script continues converting other pages when one page fails (unless you use `-ErrorAction Stop`).
 
 ## Recommendations
 
