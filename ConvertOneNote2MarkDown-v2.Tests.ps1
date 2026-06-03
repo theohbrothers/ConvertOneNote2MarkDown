@@ -817,20 +817,27 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
             }
         }
 
-        It "Should determine attachment references correctly" {
-            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+        It "Should not call Get-OneNotePageContent while building conversion config" {
+            $getPageContentCalls = 0
+            Mock Get-OneNotePageContent { $script:getPageContentCalls++; Get-FakeOneNotePageContent }
 
-            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
-            $result.Count | Should -Be 48
+            $null = @( New-SectionGroupConversionConfig @params 6>$null )
 
-            foreach ($pageCfg in $result) {
-                $pageCfg['insertedAttachments'].Count | Should -Be 4
+            $getPageContentCalls | Should -Be 0
+        }
 
-                $pageCfg['insertedAttachments'][0]['markdownFileName'] | Should -Be 'attachment1\(something-in-brackets\).txt'
-                $pageCfg['insertedAttachments'][1]['markdownFileName'] | Should -Be 'attachment2\(something-in-brackets\).txt'
-                $pageCfg['insertedAttachments'][2]['markdownFileName'] | Should -Be 'attachment3.txt'
-                $pageCfg['insertedAttachments'][3]['markdownFileName'] | Should -Be 'attachment4.txt'
+        It "Should determine attachment references correctly via Get-PageInsertedAttachments" {
+            $pageCfg = @{
+                object = @{ ID = 'test-page-id' }
+                mediaPath = 'c:\temp\notes\mynotebook\media'
             }
+            $attachments = @( Get-PageInsertedAttachments -OneNoteConnection $params.OneNoteConnection -PageCfg $pageCfg )
+
+            $attachments.Count | Should -Be 4
+            $attachments[0]['markdownFileName'] | Should -Be 'attachment1\(something-in-brackets\).txt'
+            $attachments[1]['markdownFileName'] | Should -Be 'attachment2\(something-in-brackets\).txt'
+            $attachments[2]['markdownFileName'] | Should -Be 'attachment3.txt'
+            $attachments[3]['markdownFileName'] | Should -Be 'attachment4.txt'
         }
 
         It "Should generate fully unique docx file for each page, even for identically-named pages in a section" {
@@ -1700,6 +1707,27 @@ Describe 'Convert-OneNotePage' -Tag 'Unit' {
             $err = Convert-OneNotePage @params 6>$null 2>&1
 
             $err | Should -Not -Be $null
+        }
+
+        It "Skips conversion when skipIfExists is enabled and markdown file exists" {
+            $params['Config']['skipIfExists']['value'] = 2
+            Mock Test-Path -ParameterFilter { $LiteralPath } { $true }
+
+            Convert-OneNotePage @params 6>$null
+
+            Assert-MockCalled -CommandName Get-OneNotePageContent -Times 0 -Scope It
+            Assert-MockCalled -CommandName Publish-OneNotePage -Times 0 -Scope It
+        }
+
+        It "Records conversion failure when failedPagesExport is enabled" {
+            $params['Config']['failedPagesExport']['value'] = 2
+            $script:ConversionFailureRecords = [System.Collections.ArrayList]@()
+            Mock Publish-OneNotePage -ParameterFilter { $PublishFormat -eq 'pfWord' } { throw 'publish failed' }
+
+            $null = Convert-OneNotePage @params 6>$null 2>&1
+
+            $script:ConversionFailureRecords.Count | Should -Be 1
+            $script:ConversionFailureRecords[0].pageId | Should -Be $params.ConversionConfig.id
         }
 
         It "Publishes OneNote page to pdf" {

@@ -24,6 +24,11 @@ $targetNotebook = ''
 # 2: Use existing .docx files (90% faster)
 $usedocx = 1
 
+# Whether to skip converting a page if the resulting Markdown file already exists
+# 1: Do not skip - Overwrite existing files (Default)
+# 2: Skip already converted pages (Great for resuming crashed runs)
+$skipIfExists = 1
+
 # Whether to discard word .docx after conversion
 # 1: Discard intermediate .docx files - Default
 # 2: Keep .docx files
@@ -88,3 +93,8 @@ $newlineCharacter = 1
 # 1: Don't include PDF - Default
 # 2: Include PDF
 $exportPdf = 1
+
+# Whether to export a JSON file listing pages that failed conversion
+# 1: Don't export (Default)
+# 2: Export automatically next to the notebook's 'docx' folder as 'conversion-failures.jsonl' (for resuming; safe to delete after successful retry)
+$failedPagesExport = 1
