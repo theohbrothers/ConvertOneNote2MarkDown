@@ -33,6 +33,7 @@ The powershell script `ConvertOneNote2MarkDown-v2.ps1` will utilize the OneNote 
 * Choose whether to remove `\` escape symbol that are created when converting with Pandoc
 * Choose whether to use Line Feed (`LF`) or Carriage Return + Line Feed (`CRLF`) for new lines
 * Choose whether to include a `.pdf` export alongside the `.md` file. `.md` does not preserve `InkDrawing` (i.e. overlayed drawings, highlights, pen marks) absolute positions within a page, but a `.pdf` export is a complete page snapshot that preserves `InkDrawing` absolute positions within a page.
+* Choose whether to **remove a notebook's previous output** before converting it (`$overwrite = 2`), so notes, folders and media that were renamed or deleted in OneNote since the last run don't linger. The notebook's `docx` folder is always kept, so existing `.docx` files can still be reused.
 * Detailed logs. Run the script with `-Verbose` to see detailed logs of each page's conversion.
 
 ## Known Issues

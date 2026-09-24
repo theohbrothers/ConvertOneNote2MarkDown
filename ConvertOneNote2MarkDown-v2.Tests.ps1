@@ -1812,6 +1812,44 @@ Describe 'Convert-OneNotePage' -Tag 'Unit' {
 
 }
 
+Describe "Remove-PreviousNotebookOutput" -Tag 'Unit' {
+
+    Context 'Behavior' {
+
+        BeforeEach {
+            $notebookDirectory = Join-Path $TestDrive 'my-notebook'
+            if (Test-Path -LiteralPath $notebookDirectory) {
+                Remove-Item -LiteralPath $notebookDirectory -Recurse -Force # Left over from a previous test (e.g. the dry run), incl. the read-only file
+            }
+            New-Item -ItemType Directory -Path (Join-Path $notebookDirectory 'docx') -Force > $null
+            New-Item -ItemType Directory -Path (Join-Path $notebookDirectory 'section\media') -Force > $null
+            'docx' | Set-Content -LiteralPath (Join-Path $notebookDirectory 'docx\page.docx')
+            'note' | Set-Content -LiteralPath (Join-Path $notebookDirectory 'section\stale-page.md')
+            'pdf' | Set-Content -LiteralPath (Join-Path $notebookDirectory 'section\media\attachment.pdf')
+            (Get-Item -LiteralPath (Join-Path $notebookDirectory 'section\media\attachment.pdf')).IsReadOnly = $true # OneNote's inserted files are read-only
+        }
+
+        It "Should remove everything in the notebook's directory except the docx folder" {
+            Remove-PreviousNotebookOutput -NotesDestination $TestDrive -NotebookName 'my notebook'
+
+            Test-Path -LiteralPath (Join-Path $notebookDirectory 'section') | Should -Be $false
+            Test-Path -LiteralPath (Join-Path $notebookDirectory 'docx\page.docx') | Should -Be $true
+        }
+
+        It "Should not remove anything on a dry run" {
+            Remove-PreviousNotebookOutput -NotesDestination $TestDrive -NotebookName 'my notebook' -DryRun
+
+            Test-Path -LiteralPath (Join-Path $notebookDirectory 'section\stale-page.md') | Should -Be $true
+        }
+
+        It "Should do nothing if the notebook's directory does not exist" {
+            { Remove-PreviousNotebookOutput -NotesDestination $TestDrive -NotebookName 'other notebook' } | Should -Not -Throw
+        }
+
+    }
+
+}
+
 Describe "Print-ConversionErrors" -Tag 'Unit' {
 
     Context 'Behavior' {

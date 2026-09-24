@@ -191,6 +191,16 @@ Whether to include a PDF export alongside the markdown file
             value = 1
             validateRange = 1,2
         }
+        overwrite = @{
+            description = @'
+Whether to remove a notebook's previous output before converting it. Without this, files of the same name are overwritten, but notes, folders and media that were renamed or deleted in OneNote since the last run are left behind. The notebook's docx folder is always kept
+1: Keep previous output - Default
+2: Remove previous output (except the docx folder)
+'@
+            default = 1
+            value = 1
+            validateRange = 1,2
+        }
     }
 
     $config
@@ -524,6 +534,45 @@ Function Set-ContentNoBom {
             }
         }else {
             Set-Content @PSBoundParameters
+        }
+    }
+}
+
+Function Remove-PreviousNotebookOutput {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $NotesDestination
+    ,
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $NotebookName
+    ,
+        [Parameter()]
+        [switch]
+        $DryRun
+    )
+
+    # The same directory New-SectionGroupConversionConfig converts this notebook into
+    $nameCompat = $NotebookName | Remove-InvalidFileNameChars
+    if (! $nameCompat.Trim('-. ')) {
+        throw "Refusing to remove previous output of notebook '$NotebookName': its directory name would be empty"
+    }
+    $notebookDirectory = [io.path]::combine( $NotesDestination.TrimEnd('/').TrimEnd('\').Replace('\', [io.path]::DirectorySeparatorChar), $nameCompat )
+    if (! (Test-Path -LiteralPath $notebookDirectory -PathType Container)) {
+        return
+    }
+
+    # Keep the docx folder, so that 'usedocx = 2' can still reuse its files
+    foreach ($item in @( Get-ChildItem -LiteralPath $notebookDirectory -Force | Where-Object { $_.Name -ne 'docx' } )) {
+        "Removing previous output: $( $item.FullName )" | Write-Verbose
+        if (! $DryRun) {
+            # A non-Win32 path, so that Windows Powershell <= 5 can also remove files beyond the 260-character path limit
+            $literalPath = if ($PSVersionTable.PSVersion.Major -le 5 -and $env:OS -match 'windows') { "\\?\$( $item.FullName )" } else { $item.FullName }
+            Remove-Item -LiteralPath $literalPath -Recurse -Force -ErrorAction Stop
         }
     }
 }
@@ -1432,6 +1481,10 @@ Function Convert-OneNote2MarkDown {
         $pageConversionConfigsAll = @()
         foreach ($notebook in $notebooks) {
             "`nConverting notebook '$( $notebook.name )'... (Ignoring deleted notes)" | Write-Host -ForegroundColor Cyan
+            if ($config['overwrite']['value'] -eq 2) {
+                "Removing previous output of notebook '$( $notebook.name )' (keeping its docx folder)" | Write-Host -ForegroundColor Cyan
+                Remove-PreviousNotebookOutput -NotesDestination $config['notesdestpath']['value'] -NotebookName $notebook.name -DryRun:([bool]$config['dryRun']['value'])
+            }
             New-SectionGroupConversionConfig -OneNoteConnection $OneNote -NotesDestination $config['notesdestpath']['value'] -Config $config -SectionGroups $notebook -LevelsFromRoot 0 -ErrorVariable +totalerr | Tee-Object -Variable pageConversionConfigs | Convert-OneNotePage -OneNoteConnection $OneNote -Config $config -ErrorVariable +totalerr
             "`nDone converting notebook '$( $notebook.name )' with $( ($pageConversionConfigs | Measure-object).Count ) notes." | Write-Host -ForegroundColor Cyan
             $pageConversionConfigsAll += $pageConversionConfigs
