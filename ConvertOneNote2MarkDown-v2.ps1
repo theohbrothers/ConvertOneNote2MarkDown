@@ -386,6 +386,11 @@ Function Truncate-PathFileName {
         [ValidateRange(0,255)]
         [int]
         $Length
+    ,
+        # A suffix (e.g. the '-1' postfix of a duplicate page name) that must survive truncation
+        [Parameter()]
+        [string]
+        $KeepSuffix = ''
     )
 
     process {
@@ -404,7 +409,11 @@ Function Truncate-PathFileName {
         $name = Split-Path $Path -Leaf
         if ($name.Length -gt $maxLength) {
             $parent = Split-Path $Path -Parent
-            $truncatedName = $name.Substring(0, $maxLength)
+            $truncatedName = if ($KeepSuffix -and $name.EndsWith($KeepSuffix) -and $maxLength -gt $KeepSuffix.Length) {
+                $name.Substring(0, $maxLength - $KeepSuffix.Length) + $KeepSuffix
+            }else {
+                $name.Substring(0, $maxLength)
+            }
             [io.path]::combine( $parent, $truncatedName )
         }else {
             $Path
@@ -800,17 +809,18 @@ Function New-SectionGroupConversionConfig {
                         $pageCfg['filePathRel'] = & {
                             $filePathRel = "$( $pageCfg['pagePrefix'] )$( $pageCfg['nameCompat'] )"
 
-                            # in case multiple pages with the same name exist in a section, postfix the filename
+                            # In case multiple pages with the same name exist in a section, postfix the filename.
+                            # Compare the names as they will be written (truncated to fit '<name>.md'), so two long names that only differ
+                            # after the cut-off are also recognized as duplicates. The postfix is kept when truncating below, so it can't be cut off again.
+                            $pageCfg['filePathRelKey'] = $filePathRel | Truncate-PathFileName -Length ($config['mdFileNameAndFolderNameMaxLength']['value'] - 3)
                             $recurrence = 0
                             foreach ($p in $sectionCfg['pages']) {
-                                if ($p['pagePrefix'] -eq $pageCfg['pagePrefix'] -and $p['pathFromRoot'] -eq $pageCfg['pathFromRoot']) {
+                                if ($p['filePathRelKey'] -eq $pageCfg['filePathRelKey']) {
                                     $recurrence++
                                 }
                             }
-                            if ($recurrence -gt 0) {
-                                $filePathRel = "$filePathRel-$recurrence"
-                            }
-                            $filePathRel | Truncate-PathFileName -Length $config['mdFileNameAndFolderNameMaxLength']['value'] # Truncate to no more than 255 characters so we don't hit the folder name limit on most file systems on Windows / Linux
+                            $pageCfg['filePathRelPostfix'] = if ($recurrence -gt 0) { "-$recurrence" } else { '' }
+                            "$filePathRel$( $pageCfg['filePathRelPostfix'] )" | Truncate-PathFileName -Length $config['mdFileNameAndFolderNameMaxLength']['value'] -KeepSuffix $pageCfg['filePathRelPostfix'] # Truncate to no more than 255 characters so we don't hit the folder name limit on most file systems on Windows / Linux
                         }
                         $pageCfg['filePathRelUnderscore'] = $pageCfg['filePathRel'].Replace( [io.path]::DirectorySeparatorChar, '_' )
                         $pageCfg['filePathNormal'] = & {
@@ -819,7 +829,7 @@ Function New-SectionGroupConversionConfig {
                             }else {
                                 [io.path]::combine( $cfg['notesDirectory'], $sectionCfg['nameCompat'], "$( $pageCfg['filePathRel'] )" )
                             }
-                            "$( $pathWithoutExtension | Truncate-PathFileName -Length ($config['mdFileNameAndFolderNameMaxLength']['value'] - 3) ).md" # Truncate to no more than 255 characters so we don't hit the file name limit on Windows / Linux
+                            "$( $pathWithoutExtension | Truncate-PathFileName -Length ($config['mdFileNameAndFolderNameMaxLength']['value'] - 3) -KeepSuffix $pageCfg['filePathRelPostfix'] ).md" # Truncate to no more than 255 characters so we don't hit the file name limit on Windows / Linux
                         }
                         $pageCfg['filePathLong'] = "\\?\$( $pageCfg['filePathNormal'] )" # A non-Win32 path. Prefixing with '\\?\' allows Windows Powershell <= 5 (based on Win32) to support long absolute paths.
                         $pageCfg['filePath'] = if ($PSVersionTable.PSVersion.Major -le 5) {
@@ -896,7 +906,9 @@ Function New-SectionGroupConversionConfig {
                                     description = 'Change inserted attachment(s) filename references'
                                     replacements = @(
                                         @{
-                                            searchRegex = [regex]::Escape( $attachmentCfg['object'].preferredName )
+                                            # Only where the name is not part of a longer file name: with attachments '11-36-00002.pdf' and 'Datenblatt_11-36-00002.pdf'
+                                            # on one page, a plain search for the first one also matched inside the second, nesting one link inside the other
+                                            searchRegex = '(?<![\w.\-/])' + [regex]::Escape( $attachmentCfg['object'].preferredName ) + '(?![\w.\-])'
                                             replacement = "[$( $attachmentCfg['markdownFileName'] )]($( $pageCfg['mediaPathPandoc'] )/$( $attachmentCfg['markdownFileName'] ))"
                                         }
                                     )
@@ -1241,11 +1253,13 @@ Function Convert-OneNotePage {
                 foreach ($image in $images) {
                     # Rename Image
                     try {
-                        $newimageName = if ($config['medialocation']['value'] -eq 2) {
+                        # The page-name prefix may contain characters that are valid in file names but break the markdown image link,
+                        # e.g. '#' (read as a URL fragment) or "'" (e.g. from a page named "c't: Newsletter #10"). Strip those, like for inserted attachments.
+                        $newimageName = $( if ($config['medialocation']['value'] -eq 2) {
                             "$( $pageCfg['filePathRelUnderscore'] )-$($image.BaseName)$($image.Extension)"
                         }else {
                             "$( $pageCfg['pathFromRootCompat'] )-$($image.BaseName)$($image.Extension)"
-                        }
+                        } ) | Remove-InvalidFileNameCharsInsertedFiles
                         $newimagePath = [io.path]::combine( $pageCfg['mediaPath'], $newimageName )
                         "Moving image: $( $image.FullName ) to $( $newimagePath )" | Write-Verbose
                         if (!$config['dryRun']['value']) {
