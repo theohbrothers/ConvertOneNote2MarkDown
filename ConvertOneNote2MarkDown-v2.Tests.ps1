@@ -372,6 +372,24 @@ Describe "Remove-InvalidFileNameCharsInsertedFiles" -Tag 'Unit' {
 }
 
 
+Describe "ConvertFrom-OneNoteEscapedName" -Tag 'Unit' {
+
+    Context 'Behavior' {
+
+        It "Should decode OneNote's '^' codes in section names" {
+            'AI ^M  ML' | ConvertFrom-OneNoteEscapedName | Should -Be 'AI /  ML'
+            'Messen^J Konferenzen^J Seminare' | ConvertFrom-OneNoteEscapedName | Should -Be 'Messen& Konferenzen& Seminare'
+            'plain name' | ConvertFrom-OneNoteEscapedName | Should -Be 'plain name'
+        }
+
+        It "Should turn a decoded '/' into a dash in the directory name" {
+            'AI ^M  ML' | ConvertFrom-OneNoteEscapedName | Remove-InvalidFileNameChars | Should -Not -Match '\^'
+        }
+
+    }
+
+}
+
 Describe "Encode-Markdown" -Tag 'Unit' {
 
     Context 'Parameters' {
