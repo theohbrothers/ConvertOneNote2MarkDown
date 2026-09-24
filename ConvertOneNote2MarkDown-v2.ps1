@@ -465,6 +465,22 @@ Function Remove-InvalidFileNameCharsInsertedFiles {
     return $newName
 }
 
+Function ConvertFrom-OneNoteEscapedName {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true,Position = 0,ValueFromPipeline = $true)]
+        [AllowEmptyString()]
+        [string]
+        $Name
+    )
+
+    process {
+        # OneNote stores characters that aren't allowed in its section file names as '^' codes in the section's name,
+        # e.g. a section named 'AI / ML' is reported as 'AI ^M  ML', and 'DECT & Bluetooth' as 'DECT^J Bluetooth'
+        $Name.Replace('^M', '/').Replace('^J', '&')
+    }
+}
+
 Function Encode-Markdown {
     [CmdletBinding()]
     param (
@@ -681,7 +697,7 @@ Function New-SectionGroupConversionConfig {
         $cfg['object'] = $sectionGroup # Keep a reference to the SectionGroup object
         $cfg['kind'] = 'SectionGroup'
         $cfg['id'] = $sectionGroup.ID # E.g. {9570CCF6-17C2-4DCE-83A0-F58AE8914E29}{1}{B0}
-        $cfg['nameCompat'] = $sectionGroup.name | Remove-InvalidFileNameChars
+        $cfg['nameCompat'] = $sectionGroup.name | ConvertFrom-OneNoteEscapedName | Remove-InvalidFileNameChars
         $cfg['levelsFromRoot'] = $LevelsFromRoot
         $cfg['uri'] = $sectionGroup.path # E.g. https://d.docs.live.net/0123456789abcdef/Skydrive Notebooks/mynotebook/mysectiongroup
         $cfg['notesDirectory'] = [io.path]::combine( $NotesDestination.TrimEnd('/').TrimEnd('\').Replace('\', [io.path]::DirectorySeparatorChar), $cfg['nameCompat'] ) # No need to truncate. Section Group and Section names have a max length of 50, so we should never hit the absolute path, file name, or directory name limits on Windows
@@ -720,7 +736,7 @@ Function New-SectionGroupConversionConfig {
                 $sectionCfg['object'] = $section # Keep a reference to the Section object
                 $sectionCfg['kind'] = 'Section'
                 $sectionCfg['id'] = $section.ID # E.g {BE566C4F-73DC-43BD-AE7A-1954F8B22C2A}{1}{B0}
-                $sectionCfg['nameCompat'] = $section.name | Remove-InvalidFileNameChars
+                $sectionCfg['nameCompat'] = $section.name | ConvertFrom-OneNoteEscapedName | Remove-InvalidFileNameChars
                 $sectionCfg['levelsFromRoot'] = $cfg['levelsFromRoot'] + 1
                 $sectionCfg['pathFromRoot'] = "$( $cfg['pathFromRoot'] )$( [io.path]::DirectorySeparatorChar )$( $sectionCfg['nameCompat'] )".Trim([io.path]::DirectorySeparatorChar) # No need to truncate. Section Group and Section names have a max length of 50, so we should never hit the absolute path, file name, or directory name limits on Windows
                 $sectionCfg['pathFromRootCompat'] = $sectionCfg['pathFromRoot'] | Remove-InvalidFileNameChars
