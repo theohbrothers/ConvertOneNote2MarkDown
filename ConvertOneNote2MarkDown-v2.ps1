@@ -152,7 +152,7 @@ Whether to include page timestamp and separator at top of document
         }
         keepspaces = @{
             description = @'
-Whether to clear extra newlines between unordered (bullet) and ordered (numbered) list items, non-breaking spaces from blank lines, and `>` after unordered lists
+Whether to clear extra newlines between unordered (bullet) and ordered (numbered) list items, non-breaking spaces from blank lines and line ends (other non-breaking spaces become normal spaces), and `>` after unordered lists
 1: Clear - Default
 2: Don't clear
 '@
@@ -933,10 +933,23 @@ Function New-SectionGroupConversionConfig {
                                 @{
                                     description = 'Clear extra newlines between unordered (bullet) and ordered (numbered) list items, non-breaking spaces from blank lines, and `>` after unordered lists'
                                     replacements = @(
-                                        # Remove non-breaking spaces
+                                        # Non-breaking spaces: web-clipped content is full of them, often as the only space between two words
+                                        # (e.g. 'the<nbsp>Windows<nbsp>key'). Deleting them all glued those words together ('Windowskey'), so:
+                                        # remove them at the end of a line (incl. lines that only contain them), since converting them there could
+                                        # create a trailing-double-space hard line break,
                                         @{
-                                            searchRegex = [regex]::Escape([char]0x00A0)
+                                            searchRegex = '(?m)[ \t\u00A0]*\u00A0[ \t\u00A0]*$'
                                             replacement = ''
+                                        }
+                                        # remove them at the start of a line, keeping its indentation, since converting them there could turn the line into an indented code block,
+                                        @{
+                                            searchRegex = '(?m)^([ \t]*)\u00A0[ \t\u00A0]*'
+                                            replacement = '$1'
+                                        }
+                                        # and turn any other run of them (with adjacent spaces) into a single space
+                                        @{
+                                            searchRegex = '[ \t]*\u00A0[ \t\u00A0]*'
+                                            replacement = ' '
                                         }
                                         # Remove an extra newline between each occurrence of '- some unordered list item'
                                         @{
