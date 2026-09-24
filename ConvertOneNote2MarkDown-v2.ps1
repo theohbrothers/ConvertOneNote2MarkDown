@@ -497,6 +497,54 @@ Function Encode-Markdown {
     $Name
 }
 
+Function Remove-PageHeader {
+    [CmdletBinding()]
+    param (
+        # The markdown lines produced by pandoc from a published page
+        [Parameter(Mandatory)]
+        [AllowEmptyCollection()]
+        [AllowEmptyString()]
+        [string[]]
+        $Lines
+    ,
+        # The page's name. Without a date/time header, a first line matching it is removed too (we add our own heading)
+        [Parameter()]
+        [string]
+        $Title = ''
+    )
+
+    # A page published to docx starts with its title, date and time paragraphs (e.g. 'Docker', 'Donnerstag, 17. Oktober 2024', '09:50'),
+    # which pandoc renders as the first lines of the markdown. We add our own heading, so remove them - but only when they are really
+    # there: some pages (e.g. emails sent to OneNote) have no date/time paragraphs, and blindly dropping the first 6 lines removed real content.
+    # The title may be empty (an untitled page yields a line with just a non-breaking space).
+    $datePattern = '^(?=.*\p{L})(?=.*\b\d{4}\b)[^|#>*]{1,80}$' # Some text with a 4-digit year, in any locale
+    $timePattern = '^\d{1,2}:\d{2}(:\d{2})?(\s*[AaPp]\.?\s?[Mm]\.?)?$' # E.g. '09:50', '9:19 AM'
+    $clean = { param($s) $s.Replace([string][char]0x00A0, ' ').Trim() }
+    $lettersAndDigits = { param($s) $s -replace '[^\p{L}\p{N}]', '' } # Pandoc escapes/autolinks the title text, so compare only letters and digits
+    $nonBlank = @(
+        for ($i = 0; $i -lt $Lines.Count -and $i -lt 8; $i++) {
+            if (& $clean $Lines[$i]) {
+                $i
+            }
+        }
+    )
+    $lastHeaderLine = -1
+    if ($nonBlank.Count -ge 3 -and (& $clean $Lines[$nonBlank[1]]) -match $datePattern -and (& $clean $Lines[$nonBlank[2]]) -match $timePattern) {
+        $lastHeaderLine = $nonBlank[2] # Title, date, time
+    }elseif ($nonBlank.Count -ge 2 -and (& $clean $Lines[$nonBlank[0]]) -match $datePattern -and (& $clean $Lines[$nonBlank[1]]) -match $timePattern) {
+        $lastHeaderLine = $nonBlank[1] # Empty title, date, time
+    }elseif ($Title -and $nonBlank.Count -ge 1 -and (& $lettersAndDigits $Lines[$nonBlank[0]]) -and (& $lettersAndDigits $Lines[$nonBlank[0]]) -eq (& $lettersAndDigits $Title)) {
+        $lastHeaderLine = $nonBlank[0] # Title only
+    }
+    if ($lastHeaderLine -lt 0) {
+        $Lines
+    }elseif ($lastHeaderLine + 1 -lt $Lines.Count) {
+        $Lines[($lastHeaderLine + 1)..($Lines.Count - 1)]
+    }else {
+        ''
+    }
+}
+
 Function Set-ContentNoBom {
     [CmdletBinding()]
     param (
@@ -920,8 +968,9 @@ Function New-SectionGroupConversionConfig {
                                         replacement = & {
                                             $heading = "# $( $pageCfg['object'].name )"
                                             if ($config['headerTimestampEnabled']['value'] -eq 1) {
-                                                $heading += "`n`nCreated: $(  $pageCfg['dateTime'].ToString('yyyy-MM-dd HH:mm:ss zz00') )"
-                                                $heading += "`n`nModified: $(  $pageCfg['lastModifiedTime'].ToString('yyyy-MM-dd HH:mm:ss zz00') )"
+                                                # 'zzz' without its colon (e.g. '+0200'). The former 'zz00' printed only the offset's hours, which is wrong for e.g. +05:30
+                                                $heading += "`n`nCreated: $(  $pageCfg['dateTime'].ToString('yyyy-MM-dd HH:mm:ss ') + $pageCfg['dateTime'].ToString('zzz').Replace(':', '') )"
+                                                $heading += "`n`nModified: $(  $pageCfg['lastModifiedTime'].ToString('yyyy-MM-dd HH:mm:ss ') + $pageCfg['lastModifiedTime'].ToString('zzz').Replace(':', '') )"
                                                 $heading += "`n`n---`n`n"
                                             }
                                             $heading
@@ -1273,15 +1322,8 @@ Function Convert-OneNotePage {
                 if (!$config['dryRun']['value']) {
                     # Get markdown content
                     $content = @( Get-Content -LiteralPath $pageCfg['filePath'] -ErrorAction Stop ) # Use -LiteralPath so that characters like '(', ')', '[', ']', '`', "'", '"' are supported. Or else we will get an error "Cannot find path 'xxx' because it does not exist"
-                    $content = @(
-                        if ($content.Count -gt 6) {
-                            # Discard first 6 lines which contain a header, created date, and time. We are going to add our own header
-                            $content[6..($content.Count - 1)]
-                        }else {
-                            # Empty page
-                            ''
-                        }
-                    ) -join "`n"
+                    # Discard the page's title, date and time lines (if present). We are going to add our own header
+                    $content = @( Remove-PageHeader -Lines $content -Title $pageCfg['object'].name ) -join "`n"
                 }
 
                 # Mutate

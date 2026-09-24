@@ -407,6 +407,55 @@ Describe "Encode-Markdown" -Tag 'Unit' {
 
 }
 
+Describe "Remove-PageHeader" -Tag 'Unit' {
+
+    Context 'Behavior' {
+
+        It "Should remove the title, date and time lines (<Name>)" -TestCases @(
+            @{ Name = 'German'; Lines = @('Docker', '', 'Donnerstag, 17. Oktober 2024', '', '09:50', '', 'body', 'more') }
+            @{ Name = 'English, AM/PM'; Lines = @('Max Planck', '', 'Monday, September 8, 2014', '', '9:19 AM', '', 'body', 'more') }
+            @{ Name = 'title with a year'; Lines = @('Pressemeetings 2011', '', 'Saturday, October 29, 2011', '', '6:22 AM', '', 'body', 'more') }
+            @{ Name = 'untitled page'; Lines = @([string][char]0x00A0, '', 'Dienstag, 19. August 2025', '', '12:34', '', 'body', 'more') }
+        ) {
+            param ($Name, $Lines)
+
+            $result = @( Remove-PageHeader -Lines $Lines )
+
+            ($result -join "`n").Trim() | Should -Be "body`nmore"
+        }
+
+        It "Should keep all lines if there is no date and time (e.g. an email sent to OneNote)" {
+            $lines = @('Linksammlung', '', '| **Tags:** #Teufel |', '|-------------------|', '', '**Subject:** Linksammlung', 'body')
+
+            $result = @( Remove-PageHeader -Lines $lines )
+
+            $result | Should -Be $lines
+        }
+
+        It "Should remove only a leading title line if there is no date and time, but a -Title" {
+            $lines = @('curl <http://ifconfig.me/ip> \> /volume1/extern', '', 'curl <http://ifconfig.me/ip> \> /volume1/external_ip.log', 'body')
+
+            $result = @( Remove-PageHeader -Lines $lines -Title 'curl http://ifconfig.me/ip > /volume1/extern' )
+
+            ($result -join "`n").Trim() | Should -Be "curl <http://ifconfig.me/ip> \> /volume1/external_ip.log`nbody"
+        }
+
+        It "Should return an empty string for a page that only has a header" {
+            $result = @( Remove-PageHeader -Lines @('Docker', '', 'Donnerstag, 17. Oktober 2024', '', '09:50') )
+
+            $result | Should -Be @('')
+        }
+
+        It "Should accept empty input" {
+            $result = @( Remove-PageHeader -Lines @() )
+
+            $result.Count | Should -Be 0
+        }
+
+    }
+
+}
+
 Describe "New-OneNoteConnection" -Tag 'Unit' {
 
     Context 'Behavior' {
