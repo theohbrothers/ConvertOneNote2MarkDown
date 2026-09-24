@@ -313,6 +313,24 @@ Describe "Truncate-PathFileName" -Tag 'Unit' {
             $path | Truncate-PathFileName -Length $length | Should -Be $expectedPath
         }
 
+        It "Should keep a given -KeepSuffix when truncating" {
+            $drive = "C:$( [io.path]::DirectorySeparatorChar )" # E.g. C:\
+            $path = $drive  + ("a" * 1000) + '-1'
+            $length = 123
+            $expectedPath = $drive  + ("a" * 121) + '-1'
+
+            $path | Truncate-PathFileName -Length $length -KeepSuffix '-1' | Should -Be $expectedPath
+        }
+
+        It "Should ignore -KeepSuffix if the filename does not end with it" {
+            $drive = "C:$( [io.path]::DirectorySeparatorChar )" # E.g. C:\
+            $path = $drive  + ("a" * 1000)
+            $length = 123
+            $expectedPath = $drive  + ("a" * 123)
+
+            $path | Truncate-PathFileName -Length $length -KeepSuffix '-1' | Should -Be $expectedPath
+        }
+
     }
 
 }
@@ -833,6 +851,32 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
             }
         }
 
+        It "Should not match an attachment's name inside a longer attachment name" {
+            Mock Get-OneNotePageContent {
+                @'
+<?xml version="1.0"?>
+<one:Page xmlns:one="http://schemas.microsoft.com/office/onenote/2013/onenote" ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{E19461971475288592555920101886406896686096991}" name="p0.0 test">
+    <one:Outline>
+        <one:OEChildren>
+            <one:OE><one:InsertedFile pathCache="c:\cache\a.bin" pathSource="c:\a.pdf" preferredName="11-36-00002.pdf" /></one:OE>
+            <one:OE><one:InsertedFile pathCache="c:\cache\b.bin" pathSource="c:\b.pdf" preferredName="Datenblatt_11-36-00002.pdf" /></one:OE>
+        </one:OEChildren>
+    </one:Outline>
+</one:Page>
+'@ -as [xml]
+            }
+
+            $pageCfg = @( New-SectionGroupConversionConfig @params 6>$null ) | Select-Object -First 1
+            $content = '\<\<Datenblatt_11-36-00002.pdf\>\> and \<\<11-36-00002.pdf\>\>'
+            foreach ($m in ($pageCfg['mutations'] | Where-Object { $_['description'] -eq 'Change inserted attachment(s) filename references' })) {
+                foreach ($r in $m['replacements']) {
+                    $content = $content -replace $r['searchRegex'], $r['replacement']
+                }
+            }
+
+            $content | Should -Be "\<\<[Datenblatt_11-36-00002.pdf]($( $pageCfg['mediaPathPandoc'] )/Datenblatt_11-36-00002.pdf)\>\> and \<\<[11-36-00002.pdf]($( $pageCfg['mediaPathPandoc'] )/11-36-00002.pdf)\>\>"
+        }
+
         It "Should generate fully unique docx file for each page, even for identically-named pages in a section" {
             $result = @( New-SectionGroupConversionConfig @params 6>$null )
 
@@ -882,6 +926,34 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
 
                 $pageCfg2['filePathRel'] | Should -Be "$( $pageCfg1['filePathRel'] )-1"
                 $pageCfg3['filePathRel'] | Should -Be "$( $pageCfg1['filePathRel'] )-2"
+            }
+        }
+
+        It "Should keep the unique postfix of identically named pages when truncating long names" {
+            $longName = 'Some long name ' * 20
+            $fakeHierarchy = @"
+<?xml version="1.0"?>
+<one:Notebooks xmlns:one="http://schemas.microsoft.com/office/onenote/2013/onenote">
+    <one:Notebook name="test" nickname="test" ID="{38E47DAB-211E-4EC1-85F1-129656A9D2CE}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/" lastModifiedTime="2021-08-06T16:27:58.000Z" color="#ADE792">
+        <one:Section name="s0" ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/s0.one" lastModifiedTime="2021-08-06T16:08:25.000Z" color="#8AA8E4">
+            <one:Page ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{E19461971475288592555920101886406896686096991}" name="$longName" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T16:08:25.000Z" pageLevel="1" />
+            <one:Page ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{E19461971475288592555920101886406896686096992}" name="$longName" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T16:08:25.000Z" pageLevel="1" />
+            <one:Page ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{E19461971475288592555920101886406896686096993}" name="$( $longName )differs only after the cut-off" dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T16:08:25.000Z" pageLevel="1" />
+        </one:Section>
+    </one:Notebook>
+</one:Notebooks>
+"@ -as [xml]
+            $params['SectionGroups'] = $fakeHierarchy.Notebooks.Notebook
+            $params['Config']['mdFileNameAndFolderNameMaxLength']['value'] = 100
+
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+            $result.Count | Should -Be 3
+            $result[1]['fileName'] | Should -Match '-1\.md$'
+            $result[2]['fileName'] | Should -Match '-2\.md$'
+            @( $result | ForEach-Object { $_['filePathNormal'] } | Select-Object -Unique ).Count | Should -Be 3
+            foreach ($pageCfg in $result) {
+                $pageCfg['fileName'].Length | Should -BeLessOrEqual 100
             }
         }
 
