@@ -1201,6 +1201,9 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
 
             $fakeMarkdownContent = @"
 hello world$( [char]0x00A0 )
+press the$( [char]0x00A0 ) Windows$( [char]0x00A0 )key
+$( [char]0x00A0 )$( [char]0x00A0 )no leading non-breaking spaces
+    $( [char]0x00A0 )keeps its indentation
 
 - foo
 
@@ -1244,11 +1247,14 @@ some more
                     }
                 }
 
-                # Should remove extra newline between unordered and ordered lists, remove non-breaking spaces, and '>' from ordered lists. Ignore first 8 lines for page header
+                # Should remove extra newline between unordered and ordered lists, remove non-breaking spaces at line boundaries but keep them as spaces between words, and '>' from ordered lists. Ignore first 8 lines for page header
                 $split = $mutated -split "`n"
                 $expectedBody = $split[8..($split.Count - 1)] -join "`n"
                 $expectedBody | Should -Be $( @"
 hello world
+press the Windows key
+no leading non-breaking spaces
+    keeps its indentation
 
 - foo
   - foo1
