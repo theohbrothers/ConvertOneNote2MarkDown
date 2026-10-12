@@ -404,7 +404,7 @@ Function Truncate-PathFileName {
         $name = Split-Path $Path -Leaf
         if ($name.Length -gt $maxLength) {
             $parent = Split-Path $Path -Parent
-            $truncatedName = $name.Substring(0, $maxLength)
+            $truncatedName = $name.Substring(0, $maxLength).TrimEnd('.', ' ') # Windows does not support file or folder names ending with periods or spaces
             [io.path]::combine( $parent, $truncatedName )
         }else {
             $Path
@@ -433,6 +433,8 @@ Function Remove-InvalidFileNameChars {
                 } else {
                     $newName -replace "\s", "-"
                 }
+    # Remove trailing periods and spaces. Windows strips them from file and folder names, so a folder 'foo.' would be created as 'foo', and long paths like '\\?\C:\notes\foo.\bar.md' would not be found
+    $newName = $newName.TrimEnd('.', ' ')
     return $newName
 }
 
@@ -1301,7 +1303,7 @@ Function Convert-OneNotePage {
                     Set-ContentNoBom -LiteralPath $pageCfg['filePath'] -Value $content -ErrorAction Stop # Use -LiteralPath so that characters like '(', ')', '[', ']', '`', "'", '"' are supported. Or else we will get an error "Cannot find path 'xxx' because it does not exist"
                 }
             }catch {
-                Write-Error "Failed to mutate markdown content: $( $_.Exception.Message )"
+                Write-Error "Failed to mutate markdown content of $( $pageCfg['filePathNormal'] ). Exception: $( $_.Exception.Message )"
             }
 
             "Markdown file ready: $( $pageCfg['filePathNormal'] )" | Write-Host -ForegroundColor Green

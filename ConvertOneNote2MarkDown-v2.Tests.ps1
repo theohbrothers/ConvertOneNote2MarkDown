@@ -262,6 +262,24 @@ Describe "Remove-InvalidFileNameChars" -Tag 'Unit' {
             $result | Should -Be $expectedFileName
         }
 
+        It "Should remove trailing periods" {
+            $fileName = 'foo. bar.'
+            $expectedFileName = 'foo.-bar'
+
+            $result = Remove-InvalidFileNameChars -Name $fileName
+
+            $result | Should -Be $expectedFileName
+        }
+
+        It "Should remove trailing periods and spaces if -KeepPathSpaces" {
+            $fileName = 'foo. bar. .'
+            $expectedFileName = 'foo. bar'
+
+            $result = Remove-InvalidFileNameChars -Name $fileName -KeepPathSpaces
+
+            $result | Should -Be $expectedFileName
+        }
+
     }
 
 }
@@ -309,6 +327,15 @@ Describe "Truncate-PathFileName" -Tag 'Unit' {
             $path = $drive  + ("a" * 1000)
             $length = 123
             $expectedPath = $drive  + ("a" * 123)
+
+            $path | Truncate-PathFileName -Length $length | Should -Be $expectedPath
+        }
+
+        It "Should remove trailing periods and spaces from a truncated filename" {
+            $drive = "C:$( [io.path]::DirectorySeparatorChar )" # E.g. C:\
+            $path = $drive  + ("a" * 100) + '. .' + ("b" * 100)
+            $length = 103
+            $expectedPath = $drive  + ("a" * 100)
 
             $path | Truncate-PathFileName -Length $length | Should -Be $expectedPath
         }
@@ -618,6 +645,22 @@ function Get-FakeOneNoteHierarchyWithDuplicatePageNames {
     $hierarchy
 }
 
+function Get-FakeOneNoteHierarchyWithPageNamesEndingWithAPeriod {
+    # Sample outerXML of a hierarchy object. Here we have one notebook 'test' with a page and its subpage, both with names ending with a period
+    $hierarchy = @'
+<?xml version="1.0"?>
+<one:Notebooks xmlns:one="http://schemas.microsoft.com/office/onenote/2013/onenote">
+    <one:Notebook name="test" nickname="test" ID="{38E47DAB-211E-4EC1-85F1-129656A9D2CE}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/" lastModifiedTime="2021-08-06T16:27:58.000Z" color="#ADE792">
+        <one:Section name="s0" ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{B0}" path="https://d.docs.live.net/741e69cc14cf9571/Skydrive Notebooks/test/s0.one" lastModifiedTime="2021-08-06T16:08:25.000Z" color="#8AA8E4">
+            <one:Page ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{E19461971475288592555920101886406896686096990}" name="p0.0 test." dateTime="2021-08-06T15:36:33.000Z" lastModifiedTime="2021-08-06T16:08:25.000Z" pageLevel="1" />
+            <one:Page ID="{3D017C7D-F890-4AC8-A094-DEC1163E7B85}{1}{E19461971475288592555920101886406896686096991}" name="p0.1 test." dateTime="2021-08-06T15:36:14.000Z" lastModifiedTime="2021-08-06T15:38:01.000Z" pageLevel="2" />
+        </one:Section>
+    </one:Notebook>
+</one:Notebooks>
+'@ -as [xml]
+    $hierarchy
+}
+
 function Get-FakeOneNotePageContent {
     # Sample outerXML of a page object
     $page = @'
@@ -815,6 +858,24 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
                 $pageCfg['filePathLong'] | Should -Match "$( [regex]::Escape($pageCfg['fileName']) )$"
                 $pageCfg['filePath'] | Should -Match "$( [regex]::Escape($pageCfg['fileName']) )$"
             }
+        }
+
+        It "Should determine file and folder paths without trailing periods for pages with names ending with a period" {
+            $fakeHierarchy = Get-FakeOneNoteHierarchyWithPageNamesEndingWithAPeriod
+            $params['SectionGroups'] = $fakeHierarchy.Notebooks.Notebook
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+            $result.Count | Should -Be 2
+
+            $pageCfg1 = $result[0] # First level page
+            $pageCfg2 = $result[1] # Second level page preceded by a first level page
+
+            $pageCfg1['filePathRel'] | Should -Be 'p0.0-test'
+            $pageCfg1['fileName'] | Should -Be 'p0.0-test.md'
+            $pageCfg2['pagePrefix'] | Should -Be "p0.0-test$( [io.path]::DirectorySeparatorChar )"
+            $pageCfg2['filePathRel'] | Should -Be "p0.0-test$( [io.path]::DirectorySeparatorChar )p0.1-test"
+            $pageCfg2['fileName'] | Should -Be 'p0.1-test.md'
+            $pageCfg2['fileDirectory'] | Should -Match "$( [regex]::Escape("$( [io.path]::DirectorySeparatorChar )p0.0-test") )$"
         }
 
         It "Should determine attachment references correctly" {
@@ -1790,6 +1851,14 @@ Describe 'Convert-OneNotePage' -Tag 'Unit' {
 
             Assert-MockCalled -CommandName Get-Content -ParameterFilter { $LiteralPath -and ! $Raw } -Times 1 -Scope It
             Assert-MockCalled -CommandName Set-ContentNoBom -ParameterFilter { $LiteralPath } -Times 1 -Scope It
+        }
+
+        It "Does not halt conversion if mutating markdown content fails, and reports the markdown file path" {
+            Mock Get-Content -ParameterFilter { $LiteralPath -and ! $Raw } { throw }
+
+            $err = Convert-OneNotePage @params 6>$null 2>&1
+
+            $err.Exception.Message | Select-Object -First 1 | Should -match "Failed to mutate markdown content of $( [regex]::Escape($params['ConversionConfig']['filePathNormal']) )"
         }
 
         It "Does a dry run" {
