@@ -73,6 +73,11 @@ $headerTimestampEnabled = 1
 # 2: Don't clear
 $keepspaces = 1
 
+# Whether to separate paragraphs with a blank line, or with a newline like in OneNote. Paragraphs that are separated by an empty paragraph are still separated by a blank line. Lists, tables, headings, and quotes are still separated by a blank line. Some markdown viewers (e.g. Obsidian) show a newline as a line break, while others (e.g. GitHub) join the lines into one paragraph
+# 1: Blank line - Default
+# 2: Newline
+$paragraphSeparator = 1
+
 # Whether to clear escape symbols from md files. See: https://pandoc.org/MANUAL.html#backslash-escapes
 # 1: Clear all '\' characters  - Default
 # 2: Clear all '\' characters except those preceding alphanumeric characters

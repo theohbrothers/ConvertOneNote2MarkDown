@@ -1298,6 +1298,120 @@ some more
 
         }
 
+        It "Should honor config paragraphSeparator" {
+            $params['Config']['paragraphSeparator']['value'] = 2
+            $params['Config']['keepspaces']['value'] = 2 # Keep non-breaking spaces and '>', so that only this option is tested
+
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 48
+
+            $fakeMarkdownContent = @"
+foo
+
+bar
+
+$( [char]0x00A0 )
+
+paragraph after an empty paragraph
+
+![](../media/somepage-image1.png)
+
+# heading
+
+paragraph before a list
+
+- list item 1
+- list item 2
+
+paragraph after a list
+
+| table |
+|-------|
+| cell  |
+
+paragraph after a table
+
+> quote 1
+>
+> quote 2
+
+paragraph after a quote
+
+===
+
+"@ -replace "`r", '' # On some Windows Powershell 5 versions, a here-string will contain `\r`, so let's ensure that doesn't happen.
+
+            foreach ($pageCfg in $result) {
+                # Mutate
+                $mutated = $fakeMarkdownContent
+                foreach ($m in $pageCfg['mutations']) {
+                    foreach ($r in $m['replacements']) {
+                        $mutated = $mutated -replace $r['searchRegex'], $r['replacement']
+                    }
+                }
+
+                # Should separate paragraphs with a newline, but not empty paragraphs, lists, tables, headings, and quotes, and not lines that would turn the previous line into a heading. Ignore first 8 lines for page header
+                $split = $mutated -split "`n"
+                $expectedBody = $split[8..($split.Count - 1)] -join "`n"
+                $expectedBody | Should -Be $( @"
+foo
+bar
+
+$( [char]0x00A0 )
+
+paragraph after an empty paragraph
+![](../media/somepage-image1.png)
+
+# heading
+
+paragraph before a list
+
+- list item 1
+- list item 2
+
+paragraph after a list
+
+| table |
+|-------|
+| cell  |
+
+paragraph after a table
+
+> quote 1
+> quote 2
+
+paragraph after a quote
+
+===
+
+"@ -replace "`r", '') # On some Windows Powershell 5 versions, a here-string will contain `\r`, so let's ensure that doesn't happen.
+            }
+
+            $params['Config']['paragraphSeparator']['value'] = 1
+
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 48
+
+            foreach ($pageCfg in $result) {
+                # Mutate
+                $mutated = $fakeMarkdownContent
+                foreach ($m in $pageCfg['mutations']) {
+                    foreach ($r in $m['replacements']) {
+                        $mutated = $mutated -replace $r['searchRegex'], $r['replacement']
+                    }
+                }
+
+                # Should keep blank lines between paragraphs. Ignore first 8 lines for page header
+                $split = $mutated -split "`n"
+                $expectedBody = $split[8..($split.Count - 1)] -join "`n"
+                $expectedBody | Should -Be $fakeMarkdownContent
+            }
+        }
+
         It "Should honor config keepescape" {
             $params['Config']['keepescape']['value'] = 1
 

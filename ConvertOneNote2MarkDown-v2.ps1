@@ -160,6 +160,16 @@ Whether to clear extra newlines between unordered (bullet) and ordered (numbered
             value = 1
             validateRange = 1,2
         }
+        paragraphSeparator = @{
+            description = @'
+Whether to separate paragraphs with a blank line, or with a newline like in OneNote. Paragraphs that are separated by an empty paragraph are still separated by a blank line. Lists, tables, headings, and quotes are still separated by a blank line. Some markdown viewers (e.g. Obsidian) show a newline as a line break, while others (e.g. GitHub) join the lines into one paragraph
+1: Blank line - Default
+2: Newline
+'@
+            default = 1
+            value = 1
+            validateRange = 1,2
+        }
         keepescape = @{
             description = @'
 Whether to clear escape symbols from md files. See: https://pandoc.org/MANUAL.html#backslash-escapes
@@ -911,6 +921,18 @@ Function New-SectionGroupConversionConfig {
                                         replacement = $pageCfg['levelsPrefix']
                                     }
                                 )
+                            }
+                            if ($config['paragraphSeparator']['value'] -eq 2) {
+                                @{
+                                    description = 'Separate paragraphs with a newline instead of a blank line'
+                                    replacements = @(
+                                        @{
+                                            # E.g. 'foo\n\nbar' -> 'foo\nbar', and '> foo\n>\n> bar' -> '> foo\n> bar'. Only for lines of paragraphs, i.e. not for lists, tables, headings, code, and empty paragraphs (i.e. lines containing only non-breaking spaces), and not before lines that would turn the previous line into a heading
+                                            searchRegex = '(?m)^((?:>[ \t]?)*)(?![\s#>|`~<:-]|[*+]\s|\d+[.)](?:\s|$)|\[\^|=+[ \t]*$)([^\r\n]+)\r*\n[> \t]*\r*\n(?=\1(?![\s#>|`~<:-]|[*+]\s|\d+[.)](?:\s|$)|\[\^|=+[ \t]*$)[^\r\n])'
+                                            replacement = "`$1`$2`n"
+                                        }
+                                    )
+                                }
                             }
                             @{
                                 description = 'Add heading'
