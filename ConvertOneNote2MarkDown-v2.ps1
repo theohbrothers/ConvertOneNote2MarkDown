@@ -150,6 +150,16 @@ Whether to include page timestamp and separator at top of document
             value = 1
             validateRange = 1,2
         }
+        imageAltText = @{
+            description = @'
+Whether to keep the alternative text of images (e.g. ![alt text](image.png)). For images in OneNote, this is usually text recognized in the image by OneNote, which can be very long
+1: Keep - Default
+2: Remove
+'@
+            default = 1
+            value = 1
+            validateRange = 1,2
+        }
         keepspaces = @{
             description = @'
 Whether to clear extra newlines between unordered (bullet) and ordered (numbered) list items, non-breaking spaces from blank lines, and `>` after unordered lists
@@ -911,6 +921,18 @@ Function New-SectionGroupConversionConfig {
                                         replacement = $pageCfg['levelsPrefix']
                                     }
                                 )
+                            }
+                            if ($config['imageAltText']['value'] -eq 2) {
+                                @{
+                                    description = 'Remove image alternative text'
+                                    replacements = @(
+                                        @{
+                                            # E.g. '![some \[text\]](../media/somepage-image1.png)' -> '![](../media/somepage-image1.png)'. Pandoc escapes '\', '[', and ']' in alternative text, so this must happen before clearing '\' characters
+                                            searchRegex = '!\[(?:\\.|[^\\\]])*\]\('
+                                            replacement = '![]('
+                                        }
+                                    )
+                                }
                             }
                             @{
                                 description = 'Add heading'

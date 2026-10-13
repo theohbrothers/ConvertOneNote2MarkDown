@@ -68,6 +68,11 @@ $conversion = 'markdown-simple_tables-multiline_tables-grid_tables+pipe_tables'
 # 2: Don't include
 $headerTimestampEnabled = 1
 
+# Whether to keep the alternative text of images (e.g. ![alt text](image.png)). For images in OneNote, this is usually text recognized in the image by OneNote, which can be very long
+# 1: Keep - Default
+# 2: Remove
+$imageAltText = 1
+
 # Whether to clear extra newlines between unordered (bullet) and ordered (numbered) list items, non-breaking spaces from blank lines, and `>` after unordered lists
 # 1: Clear - Default
 # 2: Don't clear

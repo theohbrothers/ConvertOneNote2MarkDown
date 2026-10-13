@@ -60,6 +60,7 @@ $prefixFolders = 1
 $medialocation = 1
 $conversion = 'markdown-simple_tables-multiline_tables-grid_tables+pipe_tables' # Default
 $headerTimestampEnabled = 1
+$imageAltText = 1
 $keepspaces = 1
 $keepescape = 1
 $newlineCharacter = 1
@@ -87,6 +88,7 @@ $newlineCharacter = 1
             $fakeUserInputs['medialocation']['value'] = ''
             $fakeUserInputs['conversion']['value'] = ''
             $fakeUserInputs['headerTimestampEnabled']['value'] = ''
+            $fakeUserInputs['imageAltText']['value'] = ''
             $fakeUserInputs['keepspaces']['value'] = ''
             $fakeUserInputs['keepescape']['value'] = ''
             $fakeUserInputs['newlineCharacter']['value'] = ''
@@ -1188,6 +1190,54 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
                 $fakeMarkdownContent = $fakeMarkdownContent -split "`n"
                 $fakeMarkdownContent.Count | Should -Be 1
                 $fakeMarkdownContent[0] | Should -Match '^# .*'
+            }
+        }
+
+        It "Should honor config imageAltText" {
+            $fakeMarkdownContent = @'
+![](../media/p0.0-test-image1.png)
+
+![some \[text\] with \\ and (brackets)](../media/p0.0-test-image2.png){width="5.1875in" height="6.83in"}text ![more text](../media/p0.0-test-image3.png)
+
+[a link](https://example.com)
+'@
+            $expectedMarkdownContentRemoved = @'
+![](../media/p0.0-test-image1.png)
+
+![](../media/p0.0-test-image2.png){width="5.1875in" height="6.83in"}text ![](../media/p0.0-test-image3.png)
+
+[a link](https://example.com)
+'@
+            $params['Config']['keepescape']['value'] = 3
+            $params['Config']['newlineCharacter']['value'] = 1
+
+            foreach ($imageAltText in 1, 2) {
+                $params['Config']['imageAltText']['value'] = $imageAltText
+
+                $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+                # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+                $result.Count | Should -Be 48
+
+                foreach ($pageCfg in $result) {
+                    $content = $fakeMarkdownContent
+
+                    # Mutate
+                    foreach ($m in $pageCfg['mutations']) {
+                        foreach ($r in $m['replacements']) {
+                            $content = $content -replace $r['searchRegex'], $r['replacement']
+                        }
+                    }
+
+                    # Strip the heading
+                    $content = $content -replace '^# [^\n]*\n\nCreated: [^\n]*\n\nModified: [^\n]*\n\n---\n\n', ''
+
+                    if ($imageAltText -eq 1) {
+                        $content | Should -Be ($fakeMarkdownContent -replace '\r', '')
+                    }else {
+                        $content | Should -Be ($expectedMarkdownContentRemoved -replace '\r', '')
+                    }
+                }
             }
         }
 
