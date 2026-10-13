@@ -1221,6 +1221,18 @@ Function Convert-OneNotePage {
                 }catch {
                     Write-Error "Failed to remove existing docx file $( $pageCfg['docxExportFilePath'] ). Exception: $( $_.Exception.Message )" -ErrorAction Continue
                 }
+                # Remove the docx directory if it is empty, so that it is not left behind after the conversion. It is created again for the next page
+                $docxDirectory = Split-Path $pageCfg['docxExportFilePath'] -Parent
+                try {
+                    if (!$config['dryRun']['value']) {
+                        if (@( Get-ChildItem -LiteralPath $docxDirectory -Force -ErrorAction Stop ).Count -eq 0) {
+                            "Removing empty docx directory: $( $docxDirectory )" | Write-Verbose
+                            Remove-Item -LiteralPath $docxDirectory -Force -ErrorAction Stop
+                        }
+                    }
+                }catch {
+                    Write-Error "Failed to remove empty docx directory $( $docxDirectory ). Exception: $( $_.Exception.Message )" -ErrorAction Continue
+                }
             }
 
             # Save any attachments

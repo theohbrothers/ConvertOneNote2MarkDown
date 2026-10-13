@@ -1741,6 +1741,48 @@ Describe 'Convert-OneNotePage' -Tag 'Unit' {
             $err | Should -Not -Be $null
         }
 
+        It "Removes the docx directory if it is empty after removing the docx file" {
+            Mock Get-ChildItem -ParameterFilter { $LiteralPath } {}
+            $docxDirectory = Split-Path $params['ConversionConfig']['docxExportFilePath'] -Parent
+
+            Convert-OneNotePage @params 6>$null
+
+            Assert-MockCalled -CommandName Remove-Item -ParameterFilter { $LiteralPath -eq $docxDirectory -and $Force } -Times 1 -Scope It
+        }
+
+        It "Keeps the docx directory if it is not empty" {
+            Mock Get-ChildItem -ParameterFilter { $LiteralPath } {
+                [pscustomobject]@{
+                    Name = 'some-other.docx'
+                }
+            }
+            $docxDirectory = Split-Path $params['ConversionConfig']['docxExportFilePath'] -Parent
+
+            Convert-OneNotePage @params 6>$null
+
+            Assert-MockCalled -CommandName Remove-Item -ParameterFilter { $LiteralPath -eq $docxDirectory } -Times 0 -Scope It
+        }
+
+        It "Keeps the docx directory if keeping docx files" {
+            Mock Get-ChildItem -ParameterFilter { $LiteralPath } {}
+            $docxDirectory = Split-Path $params['ConversionConfig']['docxExportFilePath'] -Parent
+            $params['Config']['keepdocx']['value'] = 2
+
+            Convert-OneNotePage @params 6>$null
+
+            Assert-MockCalled -CommandName Remove-Item -ParameterFilter { $LiteralPath -eq $docxDirectory } -Times 0 -Scope It
+        }
+
+        It "Does not halt conversion if removing the empty docx directory fails" {
+            Mock Get-ChildItem -ParameterFilter { $LiteralPath } {}
+            Mock Remove-Item -ParameterFilter { $LiteralPath -and $Force } { throw "i failed" }
+
+            $err = Convert-OneNotePage @params 6>$null 2>&1
+
+            $err.Exception.Message | Select-Object -First 1 | Should -match 'Failed to remove empty docx directory'
+            Assert-MockCalled -CommandName Copy-Item -Times 1 -Scope It
+        }
+
         It "Saves page attachment(s)" {
             Convert-OneNotePage @params 6>$null
 
