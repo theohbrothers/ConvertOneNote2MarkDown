@@ -1792,6 +1792,17 @@ Describe 'Convert-OneNotePage' -Tag 'Unit' {
             Assert-MockCalled -CommandName Set-ContentNoBom -ParameterFilter { $LiteralPath } -Times 1 -Scope It
         }
 
+        It "Markdown mutation: Removes trailing blank lines" {
+            Mock Get-Content -ParameterFilter { $LiteralPath -and ! $Raw } {
+                # 6 lines of header, followed by the content with a newline for each renamed image
+                @( 1..6 | ForEach-Object { 'some header' } ) + @( 'some text', '', '', '' )
+            }
+
+            Convert-OneNotePage @params 6>$null
+
+            Assert-MockCalled -CommandName Set-ContentNoBom -ParameterFilter { $LiteralPath -and $Value -match 'some text\z' } -Times 1 -Scope It
+        }
+
         It "Does a dry run" {
             Mock New-Item { 'foo' }
             Mock Remove-Item { 'foo' }

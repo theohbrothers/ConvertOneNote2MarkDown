@@ -1282,6 +1282,8 @@ Function Convert-OneNotePage {
                             ''
                         }
                     ) -join "`n"
+                    # Remove trailing blank lines. Each write of the markdown file (e.g. when renaming image references, once for each image) appends a newline. A single newline is appended again when writing the final file
+                    $content = $content -replace '[\r\n \t]+\z', ''
                 }
 
                 # Mutate
