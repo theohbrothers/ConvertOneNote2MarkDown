@@ -59,6 +59,7 @@ $usedocx = '1'
 $prefixFolders = 1
 $medialocation = 1
 $conversion = 'markdown-simple_tables-multiline_tables-grid_tables+pipe_tables' # Default
+$headerTitleEnabled = 1
 $headerTimestampEnabled = 1
 $keepspaces = 1
 $keepescape = 1
@@ -86,6 +87,7 @@ $newlineCharacter = 1
             $fakeUserInputs['mdFileNameAndFolderNameMaxLength']['value'] = ''
             $fakeUserInputs['medialocation']['value'] = ''
             $fakeUserInputs['conversion']['value'] = ''
+            $fakeUserInputs['headerTitleEnabled']['value'] = ''
             $fakeUserInputs['headerTimestampEnabled']['value'] = ''
             $fakeUserInputs['keepspaces']['value'] = ''
             $fakeUserInputs['keepescape']['value'] = ''
@@ -1188,6 +1190,45 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
                 $fakeMarkdownContent = $fakeMarkdownContent -split "`n"
                 $fakeMarkdownContent.Count | Should -Be 1
                 $fakeMarkdownContent[0] | Should -Match '^# .*'
+            }
+        }
+
+        It "Should honor config headerTitleEnabled" {
+            foreach ($headerTimestampEnabled in 1, 2) {
+                $params['Config']['headerTitleEnabled']['value'] = 2
+                $params['Config']['headerTimestampEnabled']['value'] = $headerTimestampEnabled
+
+                $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+                # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+                $result.Count | Should -Be 48
+
+                foreach ($pageCfg in $result) {
+                    $fakeMarkdownContent = ''
+
+                    # Mutate
+                    foreach ($m in $pageCfg['mutations']) {
+                        foreach ($r in $m['replacements']) {
+                            $fakeMarkdownContent = $fakeMarkdownContent -replace $r['searchRegex'], $r['replacement']
+                        }
+                    }
+
+                    if ($headerTimestampEnabled -eq 1) {
+                        # Should add only a date, newline, separator
+                        $fakeMarkdownContent = $fakeMarkdownContent -split "`n"
+                        $fakeMarkdownContent.Count | Should -Be 7
+                        $fakeMarkdownContent[0] | Should -Match '^Created: (.+)$'
+                        $fakeMarkdownContent[1] | Should -Match '^\s*$'
+                        $fakeMarkdownContent[2] | Should -Match '^Modified: (.+)$'
+                        $fakeMarkdownContent[3] | Should -Match '^\s*$'
+                        $fakeMarkdownContent[4] | Should -Be '---'
+                        $fakeMarkdownContent[5] | Should -Match '^\s*$'
+                        $fakeMarkdownContent[6] | Should -Match '^\s*$'
+                    }else {
+                        # Should add nothing
+                        $fakeMarkdownContent | Should -Be ''
+                    }
+                }
             }
         }
 

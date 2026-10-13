@@ -63,6 +63,11 @@ $medialocation = 1
 #   markdown-simple_tables-multiline_tables-grid_tables+pipe_tables
 $conversion = 'markdown-simple_tables-multiline_tables-grid_tables+pipe_tables'
 
+# Whether to include page title as a heading at top of document. Some markdown viewers (e.g. Obsidian) already show the file name as the title
+# 1: Include - Default
+# 2: Don't include
+$headerTitleEnabled = 1
+
 # Whether to include page timestamp and separator at top of document
 # 1: Include - Default
 # 2: Don't include

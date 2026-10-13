@@ -140,6 +140,16 @@ Default:
             default = 'markdown-simple_tables-multiline_tables-grid_tables+pipe_tables'
             value = 'markdown-simple_tables-multiline_tables-grid_tables+pipe_tables'
         }
+        headerTitleEnabled = @{
+            description = @'
+Whether to include page title as a heading at top of document. Some markdown viewers (e.g. Obsidian) already show the file name as the title
+1: Include - Default
+2: Don't include
+'@
+            default = 1
+            value = 1
+            validateRange = 1,2
+        }
         headerTimestampEnabled = @{
             description = @'
 Whether to include page timestamp and separator at top of document
@@ -918,12 +928,16 @@ Function New-SectionGroupConversionConfig {
                                     @{
                                         searchRegex = '^\s*'
                                         replacement = & {
-                                            $heading = "# $( $pageCfg['object'].name )"
-                                            if ($config['headerTimestampEnabled']['value'] -eq 1) {
-                                                $heading += "`n`nCreated: $(  $pageCfg['dateTime'].ToString('yyyy-MM-dd HH:mm:ss zz00') )"
-                                                $heading += "`n`nModified: $(  $pageCfg['lastModifiedTime'].ToString('yyyy-MM-dd HH:mm:ss zz00') )"
-                                                $heading += "`n`n---`n`n"
-                                            }
+                                            $heading = @(
+                                                if ($config['headerTitleEnabled']['value'] -eq 1) {
+                                                    "# $( $pageCfg['object'].name )"
+                                                }
+                                                if ($config['headerTimestampEnabled']['value'] -eq 1) {
+                                                    "Created: $(  $pageCfg['dateTime'].ToString('yyyy-MM-dd HH:mm:ss zz00') )"
+                                                    "Modified: $(  $pageCfg['lastModifiedTime'].ToString('yyyy-MM-dd HH:mm:ss zz00') )"
+                                                    "---`n`n"
+                                                }
+                                            ) -join "`n`n"
                                             $heading
                                         }
                                     }
