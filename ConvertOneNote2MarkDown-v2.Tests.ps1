@@ -58,6 +58,7 @@ $usedocx = '1'
 # $keepdocx = 1 # Deliberately omit a configuration option from
 $prefixFolders = 1
 $medialocation = 1
+$mergeInkStrokes = 1
 $conversion = 'markdown-simple_tables-multiline_tables-grid_tables+pipe_tables' # Default
 $headerTimestampEnabled = 1
 $keepspaces = 1
@@ -85,6 +86,7 @@ $newlineCharacter = 1
             $fakeUserInputs['prefixFolders']['value'] = ''
             $fakeUserInputs['mdFileNameAndFolderNameMaxLength']['value'] = ''
             $fakeUserInputs['medialocation']['value'] = ''
+            $fakeUserInputs['mergeInkStrokes']['value'] = ''
             $fakeUserInputs['conversion']['value'] = ''
             $fakeUserInputs['headerTimestampEnabled']['value'] = ''
             $fakeUserInputs['keepspaces']['value'] = ''
@@ -732,6 +734,16 @@ AAAAAElFTkSuQmCC</one:Data>
             </one:OE>
         </one:OEChildren>
     </one:Outline>
+    <one:InkDrawing lastModifiedTime="2021-08-06T16:08:30.000Z" objectID="{902AD630-91B7-4D8B-96A7-107572724072}{60}{B0}">
+        <one:Position x="74.25" y="449.25" z="1" />
+        <one:Size width="15.0" height="30.0" />
+        <one:Data>ACoDC0gQRICArARFNUY1EQAAgD8fCREAAAAAAADwPwoLAg1SsxnAED4DQiU=</one:Data>
+    </one:InkDrawing>
+    <one:InkDrawing lastModifiedTime="2021-08-06T16:08:31.000Z" objectID="{902AD630-91B7-4D8B-96A7-107572724072}{61}{B0}">
+        <one:Position x="96.75" y="464.25" z="2" />
+        <one:Size width="22.5" height="0.0" />
+        <one:Data>ACoDC0gQRICArARFNUY1EQAAgD8fCREAAAAAAADwPwoLAg41wQiQEEAUQBQ=</one:Data>
+    </one:InkDrawing>
     <one:InsertedFile selected="all" pathCache="C:\Users\LeonardJonathan\AppData\Local\Microsoft\OneNote\16.0\cache\00001BNS.bin" pathSource="C:\Users\LeonardJonathan\Desktop\attachment3.txt" preferredName="attachment3.txt" />
     <one:InsertedFile selected="all" pathCache="C:\Users\LeonardJonathan\AppData\Local\Microsoft\OneNote\16.0\cache\00001BNS.bin" pathSource="C:\Users\LeonardJonathan\Desktop\attachment4.txt" preferredName="attachment4.txt" />
 </one:Page>
@@ -1191,6 +1203,49 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
             }
         }
 
+        It "Should honor config mergeInkStrokes" {
+            $params['Config']['mergeInkStrokes']['value'] = 1
+
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 48
+
+            foreach ($pageCfg in $result) {
+                $pageCfg['inkDrawings'].Count | Should -Be 0
+                $pageCfg['images'].Count | Should -Be 0
+            }
+
+            $params['Config']['mergeInkStrokes']['value'] = 2
+
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 48
+
+            foreach ($pageCfg in $result) {
+                $pageCfg['inkDrawings'].Count | Should -Be 2
+                $pageCfg['inkDrawings'][0]['x'] | Should -Be 74.25
+                $pageCfg['inkDrawings'][0]['y'] | Should -Be 449.25
+                $pageCfg['inkDrawings'][1]['x'] | Should -Be 96.75
+                $pageCfg['inkDrawings'][1]['y'] | Should -Be 464.25
+                $pageCfg['inkDrawings'][0]['width'] | Should -Be 15
+                $pageCfg['inkDrawings'][0]['height'] | Should -Be 30
+                $pageCfg['inkDrawings'][0]['data'] | Should -Be 'ACoDC0gQRICArARFNUY1EQAAgD8fCREAAAAAAADwPwoLAg1SsxnAED4DQiU='
+                $pageCfg['inkDrawings'][1]['width'] | Should -Be 22.5
+                $pageCfg['inkDrawings'][1]['height'] | Should -Be 0
+                $pageCfg['inkDrawings'][1]['data'] | Should -Be 'ACoDC0gQRICArARFNUY1EQAAgD8fCREAAAAAAADwPwoLAg41wQiQEEAUQBQ='
+                # The page's thumbnail images, which are in paragraphs with subparagraphs. So their positions cannot be determined
+                $pageCfg['images'].Count | Should -Be 2
+                $pageCfg['images'][0]['width'] | Should -Be 19.5
+                $pageCfg['images'][0]['height'] | Should -Be 25.875
+                $pageCfg['images'][0]['x'] | Should -Be $null
+                $pageCfg['images'][1]['width'] | Should -Be 24
+                $pageCfg['images'][1]['height'] | Should -Be 27.75
+                $pageCfg['images'][1]['x'] | Should -Be $null
+            }
+        }
+
         It "Should honor config keepspaces" {
             $params['Config']['keepspaces']['value'] = 1
 
@@ -1528,6 +1583,399 @@ foo`r`nbar`r`nbaz
 
 }
 
+Describe 'Get-DocxImages' -Tag 'Unit' {
+
+    Context 'Behavior' {
+
+        It "Gets the images of a .docx file in document order, with their file names and display sizes in points" {
+            $documentXml = @'
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+    <w:body>
+        <w:p><w:r><w:drawing><wp:inline><wp:extent cx="952500" cy="1270000"/><wp:docPr id="1" name="Picture 1"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:blipFill><a:blip r:embed="rId5"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+        <w:p><w:r><w:t>foo</w:t></w:r></w:p>
+        <w:p><w:r><w:drawing><wp:anchor><wp:extent cx="127000" cy="254000"/><wp:docPr id="2" name="Picture 2"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:blipFill><a:blip r:embed="rId6"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>
+    </w:body>
+</w:document>
+'@
+            $relationshipsXml = @'
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+    <Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image2.png"/>
+    <Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com" TargetMode="External"/>
+</Relationships>
+'@
+            $docx = Join-Path $TestDrive 'test.docx'
+            Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+            $zip = [System.IO.Compression.ZipFile]::Open($docx, 'Create')
+            try {
+                foreach ($entry in @( @('word/document.xml', $documentXml), @('word/_rels/document.xml.rels', $relationshipsXml) )) {
+                    $writer = New-Object System.IO.StreamWriter($zip.CreateEntry($entry[0]).Open())
+                    try {
+                        $writer.Write($entry[1])
+                    }finally {
+                        $writer.Dispose()
+                    }
+                }
+            }finally {
+                $zip.Dispose()
+            }
+
+            $result = @( Get-DocxImages -Path $docx )
+
+            $result.Count | Should -Be 2
+            $result[0]['fileName'] | Should -Be 'image1.png'
+            $result[0]['width'] | Should -Be 75
+            $result[0]['height'] | Should -Be 100
+            $result[1]['fileName'] | Should -Be 'image2.png'
+            $result[1]['width'] | Should -Be 10
+            $result[1]['height'] | Should -Be 20
+        }
+
+    }
+
+}
+
+Describe 'Get-OneNotePageImages' -Tag 'Unit' {
+
+    Context 'Behavior' {
+
+        It "Gets the images of a page from top to bottom, with their sizes and positions" {
+            $pageXml = @'
+<?xml version="1.0"?>
+<one:Page xmlns:one="http://schemas.microsoft.com/office/onenote/2013/onenote" name="p0.0 test">
+    <one:Outline>
+        <one:Position x="36.0" y="300.0" z="0" />
+        <one:Size width="200.0" height="100.0" />
+        <one:OEChildren>
+            <one:OE alignment="left">
+                <one:Image format="png">
+                    <one:Size width="150.0" height="100.0" />
+                    <one:Data>foo</one:Data>
+                </one:Image>
+            </one:OE>
+        </one:OEChildren>
+    </one:Outline>
+    <one:Image format="png">
+        <one:Position x="50.0" y="100.0" z="1" />
+        <one:Size width="20.0" height="10.0" />
+        <one:Data>bar</one:Data>
+    </one:Image>
+</one:Page>
+'@ -as [xml]
+
+            $result = @( Get-OneNotePageImages -PageXml $pageXml )
+
+            $result.Count | Should -Be 2
+            $result[0]['x'] | Should -Be 50
+            $result[0]['y'] | Should -Be 100
+            $result[0]['width'] | Should -Be 20
+            $result[0]['height'] | Should -Be 10
+            $result[1]['x'] | Should -Be 36
+            $result[1]['y'] | Should -Be 300
+            $result[1]['width'] | Should -Be 150
+            $result[1]['height'] | Should -Be 100
+        }
+
+        It "Determines the positions of images in an outline from the heights of the preceding or following images and empty paragraphs" -Skip:($env:OS -notmatch 'windows') {
+            Add-Type -AssemblyName PresentationCore, WindowsBase
+            $lineHeight = 12 * (New-Object System.Windows.Media.FontFamily('Arial')).LineSpacing
+            $textHeight = 20 # Unknown to Get-OneNotePageImages
+            $outlineHeight = 100 + $lineHeight + 50 + $textHeight + 40 + $lineHeight
+            $pageXml = @"
+<?xml version="1.0"?>
+<one:Page xmlns:one="http://schemas.microsoft.com/office/onenote/2013/onenote" name="p0.0 test">
+    <one:QuickStyleDef index="0" name="p" fontColor="automatic" highlightColor="automatic" font="Arial" fontSize="12.0" spaceBefore="0.0" spaceAfter="0.0" />
+    <one:Outline>
+        <one:Position x="36.0" y="86.4" z="0" />
+        <one:Size width="600.0" height="$outlineHeight" />
+        <one:OEChildren>
+            <one:OE alignment="left">
+                <one:Image format="png"><one:Size width="500.0" height="100.0" /><one:Data>foo</one:Data></one:Image>
+            </one:OE>
+            <one:OE alignment="left" quickStyleIndex="0">
+                <one:T><![CDATA[]]></one:T>
+            </one:OE>
+            <one:OE alignment="center">
+                <one:Image format="png"><one:Size width="300.0" height="50.0" /><one:Data>bar</one:Data></one:Image>
+            </one:OE>
+            <one:OE alignment="left" quickStyleIndex="0">
+                <one:T><![CDATA[some text]]></one:T>
+            </one:OE>
+            <one:OE alignment="right">
+                <one:Image format="png"><one:Size width="100.0" height="40.0" /><one:Data>baz</one:Data></one:Image>
+            </one:OE>
+            <one:OE alignment="left" quickStyleIndex="0">
+                <one:T><![CDATA[]]></one:T>
+            </one:OE>
+        </one:OEChildren>
+    </one:Outline>
+</one:Page>
+"@ -as [xml]
+
+            $result = @( Get-OneNotePageImages -PageXml $pageXml )
+
+            $result.Count | Should -Be 3
+            $result[0]['x'] | Should -Be 36
+            $result[0]['y'] | Should -Be 86.4
+            $result[1]['x'] | Should -Be 186 # Centered
+            [Math]::Round($result[1]['y'], 4) | Should -Be ([Math]::Round(86.4 + 100 + $lineHeight, 4)) # Preceded by an image and an empty paragraph
+            $result[2]['x'] | Should -Be 536 # Right-aligned
+            [Math]::Round($result[2]['y'], 4) | Should -Be ([Math]::Round(86.4 + $outlineHeight - $lineHeight - 40, 4)) # Preceded by text of unknown height, but followed by an empty paragraph
+        }
+
+        It "Does not determine the positions of images in an outline whose layout cannot be determined" {
+            $pageXml = @'
+<?xml version="1.0"?>
+<one:Page xmlns:one="http://schemas.microsoft.com/office/onenote/2013/onenote" name="p0.0 test">
+    <one:Outline>
+        <one:Position x="36.0" y="86.4" z="0" />
+        <one:Size width="600.0" height="200.0" />
+        <one:OEChildren>
+            <one:OE alignment="left">
+                <one:Image format="png"><one:Size width="500.0" height="100.0" /><one:Data>foo</one:Data></one:Image>
+            </one:OE>
+            <one:OE alignment="left">
+                <one:Image format="png"><one:Size width="500.0" height="50.0" /><one:Data>bar</one:Data></one:Image>
+            </one:OE>
+        </one:OEChildren>
+    </one:Outline>
+    <one:Outline>
+        <one:Position x="36.0" y="400.0" z="1" />
+        <one:Size width="600.0" height="300.0" />
+        <one:OEChildren>
+            <one:OE alignment="left">
+                <one:T><![CDATA[some text]]></one:T>
+                <one:OEChildren>
+                    <one:OE alignment="left">
+                        <one:Image format="png"><one:Size width="400.0" height="100.0" /><one:Data>baz</one:Data></one:Image>
+                    </one:OE>
+                </one:OEChildren>
+            </one:OE>
+            <one:OE alignment="left">
+                <one:T><![CDATA[some text]]></one:T>
+            </one:OE>
+        </one:OEChildren>
+    </one:Outline>
+</one:Page>
+'@ -as [xml]
+
+            $result = @( Get-OneNotePageImages -PageXml $pageXml )
+
+            # The heights of the 1st outline's images do not add up to the outline's height. The 2nd outline's image is nested, and surrounded by text of unknown height
+            $result.Count | Should -Be 3
+            foreach ($imageCfg in $result) {
+                $imageCfg['x'] | Should -Be $null
+                $imageCfg['y'] | Should -Be $null
+            }
+            $result[0]['height'] | Should -Be 100
+            $result[1]['height'] | Should -Be 50
+            $result[2]['height'] | Should -Be 100
+        }
+
+    }
+
+}
+
+Describe 'New-InkDrawingImage' -Tag 'Unit' {
+
+    Context 'Behavior' {
+
+        It "Renders the strokes of ink drawing(s) into a single .png image, and returns its size in points" -Skip:($env:OS -notmatch 'windows') {
+            $destination = Join-Path $TestDrive 'ink.png'
+            $inkDrawings = @(
+                [ordered]@{ width = 15; height = 30; data = 'ACoDC0gQRICArARFNUY1EQAAgD8fCREAAAAAAADwPwoLAg1SsxnAED4DQiU=' }
+                [ordered]@{ width = 22.5; height = 0; data = 'ACoDC0gQRICArARFNUY1EQAAgD8fCREAAAAAAADwPwoLAg41wQiQEEAUQBQ=' }
+            )
+
+            $result = New-InkDrawingImage -InkDrawing $inkDrawings -Destination $destination
+
+            # Both strokes, plus padding
+            [Math]::Round($result['width'], 1) | Should -Be 49.5
+            [Math]::Round($result['height'], 1) | Should -Be 34.5
+            $bytes = [System.IO.File]::ReadAllBytes($destination)
+            $bytes[1..3] | Should -Be @( 0x50, 0x4E, 0x47 ) # 'PNG'
+        }
+
+        It "Renders the strokes of ink drawing(s) on an image in the image's resolution, extending the image if strokes exceed it, and returns its size in points" -Skip:($env:OS -notmatch 'windows') {
+            Add-Type -AssemblyName PresentationCore, WindowsBase
+            function Get-PixelSize ($Path) {
+                $frame = [System.Windows.Media.Imaging.BitmapFrame]::Create( (New-Object System.IO.MemoryStream(,[System.IO.File]::ReadAllBytes($Path))), [System.Windows.Media.Imaging.BitmapCreateOptions]::None, [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad )
+                "$( $frame.PixelWidth )x$( $frame.PixelHeight )"
+            }
+            $inkDrawings = @(
+                [ordered]@{ width = 15; height = 30; data = 'ACoDC0gQRICArARFNUY1EQAAgD8fCREAAAAAAADwPwoLAg1SsxnAED4DQiU=' } # Bounds: 99,599 22x42 pixels
+                [ordered]@{ width = 22.5; height = 0; data = 'ACoDC0gQRICArARFNUY1EQAAgD8fCREAAAAAAADwPwoLAg41wQiQEEAUQBQ=' } # Bounds: 129,619 32x2 pixels
+            )
+            $background = Join-Path $TestDrive 'background.png'
+            $bitmap = New-Object System.Windows.Media.Imaging.RenderTargetBitmap(400, 200, 96, 96, [System.Windows.Media.PixelFormats]::Pbgra32)
+            $encoder = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
+            $encoder.Frames.Add( [System.Windows.Media.Imaging.BitmapFrame]::Create($bitmap) )
+            $fileStream = [System.IO.File]::Create($background)
+            try {
+                $encoder.Save($fileStream)
+            }finally {
+                $fileStream.Dispose()
+            }
+
+            # Strokes within the image. The image is 200x100 pixels on the page, i.e. 2 image pixels per pixel
+            $destination = Join-Path $TestDrive 'image1.png'
+            Copy-Item $background $destination
+            $result = New-InkDrawingImage -InkDrawing $inkDrawings -Destination $destination -BackgroundImagePath $destination -BackgroundImageConfig @{ x = 60; y = 420; width = 150; height = 75 }
+
+            $result['width'] | Should -Be 150
+            $result['height'] | Should -Be 75
+            Get-PixelSize $destination | Should -Be '400x200'
+
+            # A stroke exceeds the image to the left by 21 pixels
+            $destination = Join-Path $TestDrive 'image2.png'
+            Copy-Item $background $destination
+            $result = New-InkDrawingImage -InkDrawing $inkDrawings -Destination $destination -BackgroundImagePath $destination -BackgroundImageConfig @{ x = 90; y = 420; width = 150; height = 75 }
+
+            [Math]::Round($result['width'], 2) | Should -Be 165.75
+            $result['height'] | Should -Be 75
+            Get-PixelSize $destination | Should -Be '442x200'
+        }
+
+    }
+
+}
+
+Describe 'Merge-InkDrawingStrokes' -Tag 'Unit' {
+
+    Context 'Behavior' {
+
+        BeforeEach {
+            function Get-Content { # Create this function for the sake of a "bug" in pester where calls to the Get-Content mock spits out a non-terminating pester error: A parameter cannot be found that matches parameter name 'Raw'
+                param (
+                    [Parameter()]
+                    [string]
+                    $Path
+                ,
+                    [Parameter()]
+                    [string]
+                    $LiteralPath
+                ,
+                    [Parameter()]
+                    [switch]
+                    $Raw
+                )
+                ''
+            }
+            Mock Get-Content {
+                @'
+![some text](c:/temp/tmp/media/image1.png){width="1.0417in" height="1.3889in"}
+
+![](c:/temp/tmp/media/image2.png){width="0.3229in" height="0.5313in"}![](c:/temp/tmp/media/image3.png){width="0.4271in" height="0.1146in"}
+
+foo ![](c:/temp/tmp/media/image4.png)
+'@
+            }
+            function Set-ContentNoBom {
+                param (
+                    [Parameter()]
+                    [string]
+                    $LiteralPath
+                ,
+                    [Parameter()]
+                    [string]
+                    $Value
+                )
+            }
+            Mock Set-ContentNoBom {}
+            Mock Remove-Item {}
+            Mock New-InkDrawingImage {
+                @{
+                    width = 49.5
+                    height = 34.5
+                }
+            }
+            Mock Get-DocxImages {
+                [ordered]@{ fileName = 'image1.png'; width = 75; height = 100 } # Not a stroke
+                [ordered]@{ fileName = 'image2.png'; width = 23.25; height = 38.25 } # 1st stroke
+                [ordered]@{ fileName = 'image3.png'; width = 30.75; height = 8.25 } # 2nd stroke
+                [ordered]@{ fileName = 'image4.png'; width = 23.25; height = 38.25 } # 3rd stroke
+            }
+            $pageCfg = [ordered]@{
+                docxExportFilePath = 'c:\temp\notes\docx\page.docx'
+                filePath = 'c:\temp\notes\page.md'
+                mediaPathPandoc = 'c:/temp/tmp/media'
+                inkDrawings = @(
+                    [ordered]@{ width = 15; height = 30; data = 'foo' }
+                    [ordered]@{ width = 22.5; height = 0; data = 'bar' }
+                    [ordered]@{ width = 15; height = 30; data = 'baz' }
+                )
+            }
+        }
+
+        It "Merges adjacent stroke images into a single image, and keeps other images" {
+            $expectedContent = @'
+![some text](c:/temp/tmp/media/image1.png){width="1.0417in" height="1.3889in"}
+
+![](c:/temp/tmp/media/image2.png){width="0.6875in" height="0.4792in"}
+
+foo ![](c:/temp/tmp/media/image4.png)
+'@
+
+            Merge-InkDrawingStrokes -PageConfig $pageCfg
+
+            Assert-MockCalled -CommandName New-InkDrawingImage -Times 2 -Scope It
+            Assert-MockCalled -CommandName New-InkDrawingImage -ParameterFilter { $InkDrawing.Count -eq 2 -and $InkDrawing[0]['data'] -eq 'foo' -and $InkDrawing[1]['data'] -eq 'bar' -and $Destination -match 'image2\.png$' } -Times 1 -Scope It
+            Assert-MockCalled -CommandName New-InkDrawingImage -ParameterFilter { $InkDrawing.Count -eq 1 -and $InkDrawing[0]['data'] -eq 'baz' -and $Destination -match 'image4\.png$' } -Times 1 -Scope It
+            Assert-MockCalled -CommandName Remove-Item -ParameterFilter { $LiteralPath -match 'image3\.png$' } -Times 1 -Scope It
+            Assert-MockCalled -CommandName Set-ContentNoBom -ParameterFilter { $Value -eq $expectedContent } -Times 1 -Scope It
+        }
+
+        It "Draws the strokes drawn on an image on that image, and merges the other strokes into a single image" {
+            Mock New-InkDrawingImage -ParameterFilter { $BackgroundImagePath } {
+                @{
+                    width = 80 # Strokes exceed the image
+                    height = 100
+                }
+            }
+            $pageCfg['images'] = @(
+                [ordered]@{ x = 36; y = 100; width = 75; height = 100 }
+            )
+            $pageCfg['inkDrawings'] = @(
+                [ordered]@{ x = 40; y = 110; width = 15; height = 30; data = 'foo' } # On the image
+                [ordered]@{ x = 300; y = 300; width = 22.5; height = 0; data = 'bar' }
+                [ordered]@{ x = 50; y = 150; width = 15; height = 30; data = 'baz' } # On the image
+            )
+            $expectedContent = @'
+![some text](c:/temp/tmp/media/image1.png){width="1.1111in" height="1.3889in"}
+
+![](c:/temp/tmp/media/image3.png){width="0.6875in" height="0.4792in"}
+
+foo
+'@ + ' '
+
+            Merge-InkDrawingStrokes -PageConfig $pageCfg
+
+            Assert-MockCalled -CommandName New-InkDrawingImage -Times 2 -Scope It
+            Assert-MockCalled -CommandName New-InkDrawingImage -ParameterFilter { $InkDrawing.Count -eq 2 -and $InkDrawing[0]['data'] -eq 'foo' -and $InkDrawing[1]['data'] -eq 'baz' -and $Destination -match 'image1\.png$' -and $BackgroundImagePath -match 'image1\.png$' -and $BackgroundImageConfig['x'] -eq 36 } -Times 1 -Scope It
+            Assert-MockCalled -CommandName New-InkDrawingImage -ParameterFilter { $InkDrawing.Count -eq 1 -and $InkDrawing[0]['data'] -eq 'bar' -and $Destination -match 'image3\.png$' -and !$BackgroundImagePath } -Times 1 -Scope It
+            Assert-MockCalled -CommandName Remove-Item -Times 2 -Scope It
+            Assert-MockCalled -CommandName Remove-Item -ParameterFilter { $LiteralPath -match 'image2\.png$' } -Times 1 -Scope It
+            Assert-MockCalled -CommandName Remove-Item -ParameterFilter { $LiteralPath -match 'image4\.png$' } -Times 1 -Scope It
+            Assert-MockCalled -CommandName Set-ContentNoBom -ParameterFilter { $Value -eq $expectedContent } -Times 1 -Scope It
+        }
+
+        It "Does nothing if no stroke images are identified" {
+            Mock Get-DocxImages {
+                [ordered]@{ fileName = 'image1.png'; width = 75; height = 100 }
+            }
+
+            Merge-InkDrawingStrokes -PageConfig $pageCfg
+
+            Assert-MockCalled -CommandName New-InkDrawingImage -Times 0 -Scope It
+            Assert-MockCalled -CommandName Set-ContentNoBom -Times 0 -Scope It
+        }
+
+    }
+
+}
+
 Describe 'Convert-OneNotePage' -Tag 'Unit' {
     function New-FakeSectionGroupConversionConfig {
         function Get-OneNotePageContent {}
@@ -1760,6 +2208,29 @@ Describe 'Convert-OneNotePage' -Tag 'Unit' {
 
             Assert-MockCalled -CommandName Get-ChildItem -Times 1 -Scope It
             Assert-MockCalled -CommandName Move-Item -Times 1 -Scope It
+        }
+
+        It "Merges ink drawing strokes into single images" {
+            Mock Merge-InkDrawingStrokes {}
+
+            Convert-OneNotePage @params 6>$null
+
+            Assert-MockCalled -CommandName Merge-InkDrawingStrokes -Times 0 -Scope It
+
+            $params['ConversionConfig']['inkDrawings'] = @( [ordered]@{ width = 15; height = 30; data = 'foo' } )
+
+            Convert-OneNotePage @params 6>$null
+
+            Assert-MockCalled -CommandName Merge-InkDrawingStrokes -Times 1 -Scope It
+        }
+
+        It "Does not halt conversion if merging ink drawing strokes fails" {
+            Mock Merge-InkDrawingStrokes { throw 'foo' }
+            $params['ConversionConfig']['inkDrawings'] = @( [ordered]@{ width = 15; height = 30; data = 'foo' } )
+
+            $err = Convert-OneNotePage @params 6>$null 2>&1
+
+            $err.Exception.Message | Select-Object -First 1 | Should -match 'Failed to merge ink drawing strokes'
         }
 
         It "Does not halt conversion if renaming image(s) fails" {

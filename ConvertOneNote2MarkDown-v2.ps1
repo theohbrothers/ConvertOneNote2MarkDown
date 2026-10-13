@@ -122,6 +122,16 @@ Whether to store media in single or multiple folders
             value = 1
             validateRange = 1,2
         }
+        mergeInkStrokes = @{
+            description = @'
+Whether to merge the strokes of pen/hand written drawings (InkDrawing) into a single image that preserves the position of each stroke. Strokes drawn on an image are drawn on that image. Requires Windows
+1: Don't merge. Each stroke is converted to a separate image - Default
+2: Merge strokes into a single image
+'@
+            default = 1
+            value = 1
+            validateRange = 1,2
+        }
         conversion = @{
             description = @'
 Specify Pandoc output format and optional extension(s) in the format: <markdownformat><+extension><-extension>
@@ -628,6 +638,411 @@ Function Publish-OneNotePage {
     $OneNoteConnection.Publish($PageId, $Destination, $PublishFormat, "")
 }
 
+Function Get-DocxImages {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $Path
+    )
+
+    # Get the images of a .docx file in document order, with their file names and display sizes in points
+    Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
+    try {
+        $entries = @{}
+        foreach ($name in 'word/document.xml', 'word/_rels/document.xml.rels') {
+            $reader = New-Object System.IO.StreamReader($zip.GetEntry($name).Open())
+            try {
+                $entries[$name] = [xml]$reader.ReadToEnd()
+            }finally {
+                $reader.Dispose()
+            }
+        }
+    }finally {
+        $zip.Dispose()
+    }
+
+    $relationshipsNs = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    $targets = @{}
+    foreach ($r in $entries['word/_rels/document.xml.rels'].DocumentElement.SelectNodes('*')) {
+        $targets[$r.GetAttribute('Id')] = $r.GetAttribute('Target')
+    }
+    $document = $entries['word/document.xml']
+    $ns = New-Object Xml.XmlNamespaceManager $document.NameTable
+    $ns.AddNamespace('wp', 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing')
+    $ns.AddNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main')
+    foreach ($drawing in $document.SelectNodes('//wp:inline | //wp:anchor', $ns)) {
+        $extent = $drawing.SelectSingleNode('wp:extent', $ns)
+        $blip = $drawing.SelectSingleNode('.//a:blip', $ns)
+        if ($extent -and $blip -and $targets[$blip.GetAttribute('embed', $relationshipsNs)]) {
+            [ordered]@{
+                fileName = Split-Path $targets[$blip.GetAttribute('embed', $relationshipsNs)] -Leaf
+                width = [double]$extent.GetAttribute('cx') / 12700 # EMUs to points
+                height = [double]$extent.GetAttribute('cy') / 12700 # EMUs to points
+            }
+        }
+    }
+}
+
+Function Get-OneNotePageImages {
+    [CmdletBinding()]
+    param (
+        # Page content
+        [Parameter(Mandatory)]
+        [xml]
+        $PageXml
+    )
+
+    # Get the images of a page in the same order as in the page's .docx export (i.e. outlines and images from top to bottom), with their sizes in points.
+    # Also get their positions on the page in points, where they can be determined. Images in outlines have no position, so it is determined from the outline's position and the heights of the paragraphs preceding or following the image, if they are known (i.e. images and empty paragraphs). Otherwise, the position is $null
+    $ns = New-Object Xml.XmlNamespaceManager $PageXml.NameTable
+    $ns.AddNamespace("one", $PageXml.DocumentElement.NamespaceURI)
+    $quickStyles = @{}
+    foreach ($q in $PageXml.SelectNodes('/one:Page/one:QuickStyleDef', $ns)) {
+        $quickStyles[$q.index] = $q
+    }
+    $lineSpacings = @{}
+    $objects = @( $PageXml.SelectNodes('/one:Page/one:Outline[one:Position] | /one:Page/one:Image[one:Position and one:Size]', $ns) | Sort-Object { [double]$_.Position.y } )
+    foreach ($o in $objects) {
+        if ($o.LocalName -eq 'Image') {
+            [ordered]@{
+                x = [double]$o.Position.x
+                y = [double]$o.Position.y
+                width = [double]$o.Size.width
+                height = [double]$o.Size.height
+            }
+            continue
+        }
+
+        # Determine the heights of the outline's paragraphs. -1 if unknown
+        $paragraphs = @( $o.SelectNodes('one:OEChildren/one:OE', $ns) )
+        $heights = New-Object double[] $paragraphs.Count
+        for ($i = 0; $i -lt $paragraphs.Count; $i++) {
+            $p = $paragraphs[$i]
+            $children = @( $p.SelectNodes('*') )
+            $heights[$i] = -1
+            if ($children.Count -ne 1 -or $p.HasAttribute('style') -or $p.HasAttribute('spaceBefore') -or $p.HasAttribute('spaceAfter') -or $p.HasAttribute('spaceBetween')) {
+                continue
+            }
+            if ($children[0].LocalName -eq 'Image' -and $children[0].SelectSingleNode('one:Size', $ns)) {
+                $heights[$i] = [double]$children[0].Size.height
+            }elseif ($children[0].LocalName -eq 'T' -and $children[0].InnerText.Trim() -eq '' -and $quickStyles.ContainsKey($p.GetAttribute('quickStyleIndex'))) {
+                # Empty paragraph, i.e. a single line in the paragraph's font
+                $q = $quickStyles[$p.GetAttribute('quickStyleIndex')]
+                if (!$lineSpacings.ContainsKey($q.font)) {
+                    $lineSpacings[$q.font] = try {
+                        Add-Type -AssemblyName PresentationCore, WindowsBase -ErrorAction Stop # Not available on non-Windows
+                        $glyphTypeface = $null
+                        if ((New-Object System.Windows.Media.Typeface($q.font) -ErrorAction Stop).TryGetGlyphTypeface([ref]$glyphTypeface)) {
+                            (New-Object System.Windows.Media.FontFamily($q.font) -ErrorAction Stop).LineSpacing
+                        }else {
+                            -1 # Font is not installed
+                        }
+                    }catch {
+                        -1
+                    }
+                }
+                if ($lineSpacings[$q.font] -gt 0) {
+                    $heights[$i] = [double]$q.fontSize * $lineSpacings[$q.font] + [double]$q.spaceBefore + [double]$q.spaceAfter
+                }
+            }
+        }
+
+        # Determine the top of the paragraphs, from the top of the outline downwards, and from the bottom of the outline upwards
+        $tops = @{}
+        $top = [double]$o.Position.y
+        for ($i = 0; $i -lt $paragraphs.Count; $i++) {
+            $tops[$i] = $top
+            if ($heights[$i] -lt 0) {
+                break
+            }
+            $top += $heights[$i]
+        }
+        $size = $o.SelectSingleNode('one:Size', $ns)
+        if ($size) {
+            $bottom = [double]$o.Position.y + [double]$size.height
+            for ($i = $paragraphs.Count - 1; $i -ge 0; $i--) {
+                if ($heights[$i] -lt 0) {
+                    break
+                }
+                $bottom -= $heights[$i]
+                $tops[$i] = $bottom
+            }
+            # Validate: The known heights cannot exceed the outline's height, and must add up to the outline's height if all of them are known
+            $knownHeights = ( $heights | Where-Object { $_ -ge 0 } | Measure-Object -Sum ).Sum
+            if ($knownHeights -gt [double]$size.height + 1 -or (@( $heights | Where-Object { $_ -lt 0 } ).Count -eq 0 -and [Math]::Abs($knownHeights - [double]$size.height) -gt 1)) {
+                "Could not determine the layout of an outline. Expected height: $( $size.height ), calculated height: $knownHeights" | Write-Verbose
+                $tops = @{}
+            }
+        }
+
+        # Get the images in document order. Only images in the outline's top level paragraphs have a determinable position
+        foreach ($image in $o.SelectNodes('.//one:Image[one:Size]', $ns)) {
+            $imageCfg = [ordered]@{
+                x = $null
+                y = $null
+                width = [double]$image.Size.width
+                height = [double]$image.Size.height
+            }
+            $i = [array]::IndexOf($paragraphs, $image.ParentNode)
+            if ($i -ge 0 -and $tops.ContainsKey($i) -and $size) {
+                $imageCfg['x'] = switch ($image.ParentNode.GetAttribute('alignment')) {
+                    'center' { [double]$o.Position.x + ([double]$size.width - $imageCfg['width']) / 2 }
+                    'right' { [double]$o.Position.x + [double]$size.width - $imageCfg['width'] }
+                    default { [double]$o.Position.x }
+                }
+                $imageCfg['y'] = $tops[$i]
+            }
+            $imageCfg
+        }
+    }
+}
+
+Function New-InkDrawingImage {
+    [CmdletBinding()]
+    param (
+        # Ink drawing configuration objects
+        [Parameter(Mandatory)]
+        [object[]]
+        $InkDrawing
+    ,
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $Destination
+    ,
+        # A .png or .jpg image that was drawn on. The strokes are rendered on top of it
+        [Parameter()]
+        [string]
+        $BackgroundImagePath
+    ,
+        # Position and size of the image that was drawn on, in points
+        [Parameter()]
+        [object]
+        $BackgroundImageConfig
+    )
+
+    # Render the strokes of the ink drawing(s) into a single image, preserving the position of each stroke. Returns the size of the image in points
+    Add-Type -AssemblyName PresentationCore, WindowsBase
+    $strokes = New-Object System.Windows.Ink.StrokeCollection
+    foreach ($i in $InkDrawing) {
+        $stream = New-Object System.IO.MemoryStream(,[Convert]::FromBase64String($i['data']))
+        $strokes.Add( (New-Object System.Windows.Ink.StrokeCollection -ArgumentList (,$stream)) ) # Stroke coordinates are relative to the page, in device-independent pixels (1/96 inch)
+    }
+    if ($strokes.Count -eq 0) {
+        throw "No strokes found in ink drawing(s)"
+    }
+    $bounds = $strokes.GetBounds()
+    if ($BackgroundImagePath) {
+        # Keep the resolution of the image. Extend the image if any stroke exceeds it
+        $background = [System.Windows.Media.Imaging.BitmapFrame]::Create( (New-Object System.IO.MemoryStream(,[System.IO.File]::ReadAllBytes($BackgroundImagePath))), [System.Windows.Media.Imaging.BitmapCreateOptions]::None, [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad )
+        $backgroundRect = New-Object System.Windows.Rect(($BackgroundImageConfig['x'] / 0.75), ($BackgroundImageConfig['y'] / 0.75), ($BackgroundImageConfig['width'] / 0.75), ($BackgroundImageConfig['height'] / 0.75)) # Points to pixels
+        $scaleX = $background.PixelWidth / $backgroundRect.Width
+        $scaleY = $background.PixelHeight / $backgroundRect.Height
+        $bounds = [System.Windows.Rect]::Union($bounds, $backgroundRect)
+        # Align the extension to whole pixels of the image, so that the image is not resampled
+        $left = $backgroundRect.Left - [Math]::Ceiling(($backgroundRect.Left - $bounds.Left) * $scaleX) / $scaleX
+        $top = $backgroundRect.Top - [Math]::Ceiling(($backgroundRect.Top - $bounds.Top) * $scaleY) / $scaleY
+        $right = $backgroundRect.Right + [Math]::Ceiling(($bounds.Right - $backgroundRect.Right) * $scaleX) / $scaleX
+        $bottom = $backgroundRect.Bottom + [Math]::Ceiling(($bounds.Bottom - $backgroundRect.Bottom) * $scaleY) / $scaleY
+        $bounds = New-Object System.Windows.Rect($left, $top, ($right - $left), ($bottom - $top))
+    }else {
+        $padding = 2
+        $bounds = New-Object System.Windows.Rect(($bounds.X - $padding), ($bounds.Y - $padding), ($bounds.Width + 2 * $padding), ($bounds.Height + 2 * $padding))
+        $scaleX = $scaleY = 2 # Render at 192 DPI so that the image stays sharp
+    }
+    $visual = New-Object System.Windows.Media.DrawingVisual
+    $context = $visual.RenderOpen()
+    $context.PushTransform( (New-Object System.Windows.Media.MatrixTransform($scaleX, 0, 0, $scaleY, (-$bounds.X * $scaleX), (-$bounds.Y * $scaleY))) )
+    $context.DrawRectangle([System.Windows.Media.Brushes]::White, $null, $bounds)
+    if ($BackgroundImagePath) {
+        $context.DrawImage($background, $backgroundRect)
+    }
+    $strokes.Draw($context)
+    $context.Pop()
+    $context.Close()
+    $bitmap = New-Object System.Windows.Media.Imaging.RenderTargetBitmap([int][Math]::Round($bounds.Width * $scaleX), [int][Math]::Round($bounds.Height * $scaleY), 96, 96, [System.Windows.Media.PixelFormats]::Pbgra32)
+    $bitmap.Render($visual)
+    $encoder = if ($Destination -match '\.jpe?g$') {
+        New-Object System.Windows.Media.Imaging.JpegBitmapEncoder -Property @{ QualityLevel = 95 }
+    }else {
+        New-Object System.Windows.Media.Imaging.PngBitmapEncoder
+    }
+    $encoder.Frames.Add( [System.Windows.Media.Imaging.BitmapFrame]::Create($bitmap) )
+    $fileStream = [System.IO.File]::Create($Destination)
+    try {
+        $encoder.Save($fileStream)
+    }finally {
+        $fileStream.Dispose()
+    }
+
+    @{
+        width = $bounds.Width * 0.75 # Pixels to points
+        height = $bounds.Height * 0.75 # Pixels to points
+    }
+}
+
+Function Merge-InkDrawingStrokes {
+    [CmdletBinding()]
+    param (
+        # Page conversion configuration object
+        [Parameter(Mandatory)]
+        [object]
+        $PageConfig
+    )
+
+    $pageCfg = $PageConfig
+    $docxImages = @( Get-DocxImages -Path $pageCfg['docxExportFilePath'] )
+
+    # Identify the stroke images of the .docx. Each ink drawing is exported as a separate image, in the same order as in the page, sized as the ink drawing plus a padding of about 8.25 points
+    $inkDrawingImages = @{}
+    $i = 0
+    foreach ($image in $docxImages) {
+        if ($i -lt $pageCfg['inkDrawings'].Count) {
+            $inkDrawingCfg = $pageCfg['inkDrawings'][$i]
+            if ([Math]::Abs($image['width'] - $inkDrawingCfg['width'] - 8.25) -le 1.5 -and [Math]::Abs($image['height'] - $inkDrawingCfg['height'] - 8.25) -le 1.5) {
+                $inkDrawingImages[$image['fileName']] = $inkDrawingCfg
+                $i++
+            }
+        }
+    }
+    "Identified $( $inkDrawingImages.Count ) of $( $pageCfg['inkDrawings'].Count ) ink drawing stroke images" | Write-Verbose
+    if ($inkDrawingImages.Count -eq 0) {
+        return
+    }
+
+    # Identify the other images of the .docx. They are exported in the same order as in the page, with the same size
+    $images = @{}
+    $pageImages = @( $pageCfg['images'] | Where-Object { $null -ne $_ } )
+    $i = 0
+    foreach ($image in $docxImages) {
+        if ($i -lt $pageImages.Count -and !$inkDrawingImages.ContainsKey($image['fileName'])) {
+            $imageCfg = $pageImages[$i]
+            if ([Math]::Abs($image['width'] - $imageCfg['width']) -le 1.5 -and [Math]::Abs($image['height'] - $imageCfg['height']) -le 1.5) {
+                $images[$image['fileName']] = $imageCfg
+                $i++
+            }
+        }
+    }
+
+    $content = Get-Content -LiteralPath $pageCfg['filePath'] -Raw -ErrorAction Stop # Use -LiteralPath so that characters like '(', ')', '[', ']', '`', "'", '"' are supported. Or else we will get an error "Cannot find path 'xxx' because it does not exist"
+    if (!$content) {
+        return
+    }
+    $imageRegex = "!\[(?:\\.|[^\\\]])*\]\($( [regex]::Escape($pageCfg['mediaPathPandoc']) )/([^)\s]+)\)(\{[^}\r\n]*\})?"
+    $references = @( [regex]::Matches($content, $imageRegex) )
+    $referencedFileNames = @{}
+    foreach ($r in $references) {
+        $referencedFileNames[$r.Groups[1].Value] = $true
+    }
+
+    # Assign each stroke drawn on an image to that image, i.e. if the stroke's center is within an image with a known position. Only .png and .jpg images that are referenced in the markdown are supported
+    $drawnOnImages = @{}
+    $strokesOnImages = @{}
+    foreach ($image in $docxImages) {
+        if (!$inkDrawingImages.ContainsKey($image['fileName'])) {
+            continue
+        }
+        $inkDrawingCfg = $inkDrawingImages[$image['fileName']]
+        $centerX = $inkDrawingCfg['x'] + $inkDrawingCfg['width'] / 2
+        $centerY = $inkDrawingCfg['y'] + $inkDrawingCfg['height'] / 2
+        foreach ($imageFileName in $images.Keys) {
+            $imageCfg = $images[$imageFileName]
+            if ($null -ne $imageCfg['x'] -and $null -ne $imageCfg['y'] -and $imageFileName -match '\.(png|jpe?g)$' -and $referencedFileNames.ContainsKey($imageFileName) -and
+                $centerX -ge $imageCfg['x'] -and $centerX -le $imageCfg['x'] + $imageCfg['width'] -and $centerY -ge $imageCfg['y'] -and $centerY -le $imageCfg['y'] + $imageCfg['height']) {
+                if (!$drawnOnImages.ContainsKey($imageFileName)) {
+                    $drawnOnImages[$imageFileName] = [System.Collections.ArrayList]@()
+                }
+                $drawnOnImages[$imageFileName].Add($image['fileName']) > $null
+                $strokesOnImages[$image['fileName']] = $true
+                break
+            }
+        }
+    }
+
+    # Render the strokes on the images they were drawn on. If that fails, the strokes are merged into a separate image instead
+    $drawnOnImageSizes = @{}
+    foreach ($imageFileName in $drawnOnImages.Keys) {
+        $imagePath = [io.path]::combine( $pageCfg['mediaPathPandoc'], $imageFileName )
+        try {
+            "Drawing $( $drawnOnImages[$imageFileName].Count ) strokes on image $imagePath" | Write-Verbose
+            $drawnOnImageSizes[$imageFileName] = New-InkDrawingImage -InkDrawing @( $drawnOnImages[$imageFileName] | ForEach-Object { $inkDrawingImages[$_] } ) -Destination $imagePath -BackgroundImagePath $imagePath -BackgroundImageConfig $images[$imageFileName]
+        }catch {
+            Write-Error "Failed to draw strokes on image $imagePath. Exception: $( $_.Exception.Message )" -ErrorAction Continue
+            foreach ($f in $drawnOnImages[$imageFileName]) {
+                $strokesOnImages.Remove($f)
+            }
+        }
+    }
+
+    # Group adjacent stroke image references, e.g. '![](<mediaPathPandoc>/image2.png)![](<mediaPathPandoc>/image3.png)'
+    $groups = [System.Collections.ArrayList]@()
+    $edits = [System.Collections.ArrayList]@()
+    $group = $null
+    foreach ($r in $references) {
+        $fileName = $r.Groups[1].Value
+        if ($inkDrawingImages.ContainsKey($fileName)) {
+            if (!$group -or $content.Substring($group['end'], $r.Index - $group['end']) -notmatch '^\s*$') {
+                $group = @{
+                    start = $r.Index
+                    fileNames = [System.Collections.ArrayList]@()
+                    hasAttributes = $false
+                }
+                $groups.Add($group) > $null
+            }
+            $group['end'] = $r.Index + $r.Length
+            if (!$strokesOnImages.ContainsKey($fileName)) {
+                $group['fileNames'].Add($fileName) > $null
+                $group['hasAttributes'] = $group['hasAttributes'] -or $r.Groups[2].Success
+            }
+        }else {
+            $group = $null
+            if ($drawnOnImageSizes.ContainsKey($fileName) -and $r.Groups[2].Success) {
+                # Update the size of an image that was drawn on, if strokes exceed the image
+                $size = $drawnOnImageSizes[$fileName]
+                if ([Math]::Abs($size['width'] - $images[$fileName]['width']) -gt 0.5 -or [Math]::Abs($size['height'] - $images[$fileName]['height']) -gt 0.5) {
+                    $edits.Add(@{
+                        start = $r.Groups[2].Index
+                        end = $r.Groups[2].Index + $r.Groups[2].Length
+                        replacement = "{width=`"$( [Math]::Round($size['width'] / 72, 4) )in`" height=`"$( [Math]::Round($size['height'] / 72, 4) )in`"}" # Points to inches
+                    }) > $null
+                }
+            }
+        }
+    }
+
+    # Replace each group with a single image of the strokes that were not drawn on an image, or remove the group if there are none
+    $fileNamesToRemove = @( $strokesOnImages.Keys )
+    foreach ($group in $groups) {
+        $replacement = ''
+        if ($group['fileNames'].Count -gt 0) {
+            $fileName = $group['fileNames'][0]
+            $size = New-InkDrawingImage -InkDrawing @( $group['fileNames'] | ForEach-Object { $inkDrawingImages[$_] } ) -Destination ([io.path]::combine( $pageCfg['mediaPathPandoc'], $fileName ))
+            $fileNamesToRemove += @( $group['fileNames'] | Select-Object -Skip 1 )
+            $replacement = "![]($( $pageCfg['mediaPathPandoc'] )/$fileName)"
+            if ($group['hasAttributes']) {
+                $replacement += "{width=`"$( [Math]::Round($size['width'] / 72, 4) )in`" height=`"$( [Math]::Round($size['height'] / 72, 4) )in`"}" # Points to inches
+            }
+        }
+        $edits.Add(@{
+            start = $group['start']
+            end = $group['end']
+            replacement = $replacement
+        }) > $null
+    }
+
+    # Apply the edits. Begin from the last edit, so that the positions of preceding edits stay intact
+    foreach ($e in @( $edits | Sort-Object { $_.start } -Descending )) { # Use dot notation, since index notation fails in Sort-Object in Powershell 6 and 7
+        $content = $content.Substring(0, $e['start']) + $e['replacement'] + $content.Substring($e['end'])
+    }
+    foreach ($f in $fileNamesToRemove) {
+        Remove-Item -LiteralPath ([io.path]::combine( $pageCfg['mediaPathPandoc'], $f )) -Force -ErrorAction SilentlyContinue
+    }
+    Set-ContentNoBom -LiteralPath $pageCfg['filePath'] -Value $content -ErrorAction Stop # Use -LiteralPath so that characters like '(', ')', '[', ']', '`', "'", '"' are supported. Or else we will get an error "Cannot find path 'xxx' because it does not exist"
+}
+
 Function New-SectionGroupConversionConfig {
     [CmdletBinding()]
     param (
@@ -868,13 +1283,12 @@ Function New-SectionGroupConversionConfig {
                         }else {
                             [io.path]::combine( $cfg['notesDocxDirectory'], "$( $pageCfg['pathFromRootCompat'] ).docx" )
                         }
+                        $pagexml = Get-OneNotePageContent -OneNoteConnection $OneNoteConnection -PageId $pageCfg['object'].ID
+                        $ns = new-object Xml.XmlNamespaceManager $pagexml.NameTable
+                        $ns.AddNamespace("one", $pagexml.DocumentElement.NamespaceURI)
                         $pageCfg['insertedAttachments'] = @(
                             & {
-                                $pagexml = Get-OneNotePageContent -OneNoteConnection $OneNoteConnection -PageId $pageCfg['object'].ID
-
                                 # Search recursively for all attachment(s). This includes attachments nested in tables etc.
-                                $ns = new-object Xml.XmlNamespaceManager $pagexml.NameTable
-                                $ns.AddNamespace("one", $pagexml.DocumentElement.NamespaceURI)
                                 $insertedFiles = $pagexml.SelectNodes("//one:InsertedFile", $ns)
                                 foreach ($i in $insertedFiles) {
                                     $attachmentCfg = [ordered]@{}
@@ -886,6 +1300,27 @@ Function New-SectionGroupConversionConfig {
 
                                     $attachmentCfg
                                 }
+                            }
+                        )
+                        $pageCfg['inkDrawings'] = @(
+                            if ($config['mergeInkStrokes']['value'] -eq 2) {
+                                # Pen/hand written drawings at the page level. Each drawing is a single stroke, exported as a separate image in the .docx in this order
+                                foreach ($i in $pagexml.SelectNodes("/one:Page/one:InkDrawing[one:Position and one:Size and one:Data]", $ns)) {
+                                    $inkDrawingCfg = [ordered]@{}
+                                    $inkDrawingCfg['x'] = [double]$i.Position.x # Points
+                                    $inkDrawingCfg['y'] = [double]$i.Position.y # Points
+                                    $inkDrawingCfg['width'] = [double]$i.Size.width # Points
+                                    $inkDrawingCfg['height'] = [double]$i.Size.height # Points
+                                    $inkDrawingCfg['data'] = $i.Data # Base64-encoded Ink Serialized Format (ISF)
+
+                                    $inkDrawingCfg
+                                }
+                            }
+                        )
+                        $pageCfg['images'] = @(
+                            if ($pageCfg['inkDrawings'].Count -gt 0) {
+                                # Images that may have been drawn on
+                                Get-OneNotePageImages -PageXml $pagexml
                             }
                         )
                         $pageCfg['mutations'] = @(
@@ -1206,6 +1641,18 @@ Function Convert-OneNotePage {
             }finally {
                 if (Test-Path $stderrFile) {
                     Remove-Item $stderrFile -Force
+                }
+            }
+
+            # Merge the strokes of pen/hand written drawings into single images
+            if ($pageCfg['inkDrawings'].Count -gt 0) {
+                try {
+                    "Merging the strokes of $( $pageCfg['inkDrawings'].Count ) ink drawing(s) into single images" | Write-Verbose
+                    if (!$config['dryRun']['value']) {
+                        Merge-InkDrawingStrokes -PageConfig $pageCfg
+                    }
+                }catch {
+                    Write-Error "Failed to merge ink drawing strokes of $( $pageCfg['filePathNormal'] ). Exception: $( $_.Exception.Message )" -ErrorAction Continue
                 }
             }
 
