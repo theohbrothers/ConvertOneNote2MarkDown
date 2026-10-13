@@ -68,7 +68,7 @@ $conversion = 'markdown-simple_tables-multiline_tables-grid_tables+pipe_tables'
 # 2: Don't include
 $headerTimestampEnabled = 1
 
-# Whether to clear extra newlines between unordered (bullet) and ordered (numbered) list items, non-breaking spaces from blank lines, and `>` after unordered lists
+# Whether to clear extra newlines between unordered (bullet) and ordered (numbered) list items, empty paragraphs (blank lines containing only non-breaking spaces), non-breaking spaces, and `>` after unordered lists
 # 1: Clear - Default
 # 2: Don't clear
 $keepspaces = 1

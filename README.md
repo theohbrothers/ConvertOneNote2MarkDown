@@ -29,7 +29,7 @@ The powershell script `ConvertOneNote2MarkDown-v2.ps1` will utilize the OneNote 
   * `markdown_phpextra` (PHP Markdown Extra)
   * `markdown_strict` (original unextended Markdown)
   * Improved headers, with title now as a `#` heading, standardized `DateTime` format for created and modified dates, and horizontal line to separate from rest of document
-* Choose whether to clear extra newlines between unordered (bullet) and ordered (numbered) list items, non-breaking spaces from blank lines, and `>` after unordered lists, which are created when converting with Pandoc
+* Choose whether to clear extra newlines between unordered (bullet) and ordered (numbered) list items, empty paragraphs (blank lines containing only non-breaking spaces), non-breaking spaces, and `>` after unordered lists, which are created when converting with Pandoc
 * Choose whether to remove `\` escape symbol that are created when converting with Pandoc
 * Choose whether to use Line Feed (`LF`) or Carriage Return + Line Feed (`CRLF`) for new lines
 * Choose whether to include a `.pdf` export alongside the `.md` file. `.md` does not preserve `InkDrawing` (i.e. overlayed drawings, highlights, pen marks) absolute positions within a page, but a `.pdf` export is a complete page snapshot that preserves `InkDrawing` absolute positions within a page.

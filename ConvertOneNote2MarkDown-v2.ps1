@@ -152,7 +152,7 @@ Whether to include page timestamp and separator at top of document
         }
         keepspaces = @{
             description = @'
-Whether to clear extra newlines between unordered (bullet) and ordered (numbered) list items, non-breaking spaces from blank lines, and `>` after unordered lists
+Whether to clear extra newlines between unordered (bullet) and ordered (numbered) list items, empty paragraphs (blank lines containing only non-breaking spaces), non-breaking spaces, and `>` after unordered lists
 1: Clear - Default
 2: Don't clear
 '@
@@ -931,8 +931,13 @@ Function New-SectionGroupConversionConfig {
                             }
                             if ($config['keepspaces']['value'] -eq 1 ) {
                                 @{
-                                    description = 'Clear extra newlines between unordered (bullet) and ordered (numbered) list items, non-breaking spaces from blank lines, and `>` after unordered lists'
+                                    description = 'Clear extra newlines between unordered (bullet) and ordered (numbered) list items, empty paragraphs (blank lines containing only non-breaking spaces), non-breaking spaces, and `>` after unordered lists'
                                     replacements = @(
+                                        # Remove empty paragraphs, including the blank line before them. Pandoc converts each empty paragraph to a line containing only a non-breaking space, which would otherwise leave three blank lines between paragraphs
+                                        @{
+                                            searchRegex = '\r*\n[ \t>]*\r*\n[ \t>]*\xA0[\xA0 \t]*(?=\r*\n|$)'
+                                            replacement = ''
+                                        }
                                         # Remove non-breaking spaces
                                         @{
                                             searchRegex = [regex]::Escape([char]0x00A0)

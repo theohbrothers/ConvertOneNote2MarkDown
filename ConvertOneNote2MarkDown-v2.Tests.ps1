@@ -1233,6 +1233,30 @@ hello world$( [char]0x00A0 )
 some new paragraph
 some more
 
+$( [char]0x00A0 )
+
+text after an empty paragraph
+
+$( [char]0x00A0 )
+
+$( [char]0x00A0 )
+
+text after two empty paragraphs
+
+- qux
+
+  $( [char]0x00A0 )
+
+- quux
+
+> quote
+>
+> $( [char]0x00A0 )
+>
+> quote after an empty paragraph
+
+$( [char]0x00A0 )
+
 "@ -replace "`r", '' # On some Windows Powershell 5 versions, a here-string will contain `\r`, so let's ensure that doesn't happen.
 
             foreach ($pageCfg in $result) {
@@ -1244,7 +1268,7 @@ some more
                     }
                 }
 
-                # Should remove extra newline between unordered and ordered lists, remove non-breaking spaces, and '>' from ordered lists. Ignore first 8 lines for page header
+                # Should remove extra newline between unordered and ordered lists, remove empty paragraphs, remove non-breaking spaces, and '>' from ordered lists. Ignore first 8 lines for page header
                 $split = $mutated -split "`n"
                 $expectedBody = $split[8..($split.Count - 1)] -join "`n"
                 $expectedBody | Should -Be $( @"
@@ -1270,6 +1294,17 @@ some other text
 
 some new paragraph
 some more
+
+text after an empty paragraph
+
+text after two empty paragraphs
+
+- qux
+- quux
+
+quote
+
+quote after an empty paragraph
 
 "@ -replace "`r", '') # On some Windows Powershell 5 versions, a here-string will contain `\r`, so let's ensure that doesn't happen.
             }
