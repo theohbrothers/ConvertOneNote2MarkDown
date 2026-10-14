@@ -122,6 +122,16 @@ Whether to store media in single or multiple folders
             value = 1
             validateRange = 1,2
         }
+        mediaLinkFormat = @{
+            description = @'
+Whether to link media (e.g. images, attachments) with markdown links or wikilinks
+1: Markdown links with relative paths, e.g. ![](../media/mysection-mypage-image1.png) - Default
+2: Wikilinks with only the file name, e.g. ![[mynotebook-mysection-mypage-image1.png]]. For markdown viewers that find linked files anywhere by their name (e.g. Obsidian), so that links don't break when moving notes or media. Media file names include the notebook name, so that they are unique across notebooks
+'@
+            default = 1
+            value = 1
+            validateRange = 1,2
+        }
         conversion = @{
             description = @'
 Specify Pandoc output format and optional extension(s) in the format: <markdownformat><+extension><-extension>
@@ -861,6 +871,32 @@ Function New-SectionGroupConversionConfig {
                             $cfg['notesBaseDirectory']
                         }
                         $pageCfg['mediaPath'] = [io.path]::combine( $pageCfg['mediaParentPath'], 'media' )
+                        $pageCfg['mediaNamePrefix'] = if ($config['mediaLinkFormat']['value'] -eq 2) {
+                            # Wikilinks contain only the file name, so the prefix also includes the notebook, i.e. the .md file's path within the notes destination, so that media file names are unique across notebooks. '#' and '^' are replaced, since they have a special meaning in wikilinks
+                            $prefix = ("$( $cfg['notebookName'] )$( [io.path]::DirectorySeparatorChar )$( $sectionCfg['pathFromRoot'] )$( [io.path]::DirectorySeparatorChar )$( $pageCfg['filePathRel'] )" | Remove-InvalidFileNameChars) -replace '[#^]', '-'
+                            if ($prefix.Length -gt 100) {
+                                # Shorten long prefixes, so that media paths stay well below the path limit of 260 characters on Windows, also after moving the notes to another folder. Keep the start (e.g. the notebook) and the end (e.g. the page), with a hash of the full prefix in between, so that it is still unique
+                                $sha256 = [System.Security.Cryptography.SHA256]::Create()
+                                $hash = [BitConverter]::ToString( $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($prefix)) ).Replace('-', '').Substring(0, 8).ToLower()
+                                $sha256.Dispose()
+                                $start = 40
+                                if ([char]::IsHighSurrogate($prefix[$start - 1])) { $start-- } # Don't split characters like emojis
+                                $end = $prefix.Length - 50
+                                if ([char]::IsLowSurrogate($prefix[$end])) { $end++ }
+                                # Cut at dashes (i.e. between words or names), if possible
+                                $i = $prefix.LastIndexOf('-', $start)
+                                if ($i -gt 0) { $start = $i }
+                                $i = $prefix.IndexOf('-', $end - 1)
+                                if ($i -ge 0 -and $i -lt $prefix.Length - 1) { $end = $i + 1 }
+                                $prefix ="$( $prefix.Substring(0, $start).TrimEnd('-') )-$hash-$( $prefix.Substring($end).TrimStart('-') )"
+                            }
+                            $prefix
+                        }elseif ($config['medialocation']['value'] -eq 2) {
+                            $pageCfg['filePathRelUnderscore']
+                        }else {
+                            # The media of all of a notebook's pages are saved in the same folder, so the prefix includes the page's parent pages and the postfix of identically-named pages, i.e. the .md file's path. Or else e.g. subpages with the same name would overwrite each other's media
+                            "$( $sectionCfg['pathFromRoot'] )$( [io.path]::DirectorySeparatorChar )$( $pageCfg['filePathRel'] )" | Remove-InvalidFileNameChars
+                        }
                         $pageCfg['mediaParentPathPandoc'] = [io.path]::combine( $pageCfg['tmpPath'] ).Replace( [io.path]::DirectorySeparatorChar, '/' ) # Pandoc outputs paths in markdown with with front slahes after the supplied <mediaPath>, e.g. '<mediaPath>/media/image.png'. So let's use a front-slashed supplied mediaPath
                         $pageCfg['mediaPathPandoc'] = [io.path]::combine( $pageCfg['tmpPath'], 'media').Replace( [io.path]::DirectorySeparatorChar, '/' ) # Pandoc outputs paths in markdown with with front slahes after the supplied <mediaPath>, e.g. '<mediaPath>/media/image.png'. So let's use a front-slashed supplied mediaPath
                         $pageCfg['docxExportFilePath'] = if ($config['docxNamingConvention']['value'] -eq 1) {
@@ -879,7 +915,24 @@ Function New-SectionGroupConversionConfig {
                                 foreach ($i in $insertedFiles) {
                                     $attachmentCfg = [ordered]@{}
                                     $attachmentCfg['object'] =  $i
-                                    $attachmentCfg['nameCompat'] =  $i.preferredName | Remove-InvalidFileNameCharsInsertedFiles
+                                    $attachmentCfg['nameCompat'] = & {
+                                        $name = $i.preferredName | Remove-InvalidFileNameCharsInsertedFiles
+                                        if ($config['mediaLinkFormat']['value'] -eq 2) {
+                                            # Wikilinks contain only the file name, so attachments are prefixed like images, so that their names are unique too
+                                            $name = "$( $pageCfg['mediaNamePrefix'] )-$name"
+                                            if ($name.Length -gt 150) {
+                                                # Shorten long names, so that media paths stay well below the path limit of 260 characters on Windows. Keep the extension, and append a hash of the full name, so that it is still unique
+                                                $sha256 = [System.Security.Cryptography.SHA256]::Create()
+                                                $hash = [BitConverter]::ToString( $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($name)) ).Replace('-', '').Substring(0, 8).ToLower()
+                                                $sha256.Dispose()
+                                                $extension = [io.path]::GetExtension($name)
+                                                $length = 150 - $extension.Length - $hash.Length - 1
+                                                if ([char]::IsHighSurrogate($name[$length - 1])) { $length-- } # Don't split characters like emojis
+                                                $name = "$( $name.Substring(0, $length).TrimEnd('-') )-$hash$extension"
+                                            }
+                                        }
+                                        $name
+                                    }
                                     $attachmentCfg['markdownFileName'] =  $attachmentCfg['nameCompat'] | Encode-Markdown -Uri
                                     $attachmentCfg['source'] =  $i.pathCache
                                     $attachmentCfg['destination'] =  [io.path]::combine( $pageCfg['mediaPath'], $attachmentCfg['nameCompat'] )
@@ -897,7 +950,23 @@ Function New-SectionGroupConversionConfig {
                                     replacements = @(
                                         @{
                                             searchRegex = [regex]::Escape( $attachmentCfg['object'].preferredName )
-                                            replacement = "[$( $attachmentCfg['markdownFileName'] )]($( $pageCfg['mediaPathPandoc'] )/$( $attachmentCfg['markdownFileName'] ))"
+                                            replacement = if ($config['mediaLinkFormat']['value'] -eq 2) {
+                                                "[[$( $attachmentCfg['nameCompat'] )]]".Replace('$', '$$') # Escape '$', since it denotes a substitution in the replacement
+                                            }else {
+                                                "[$( $attachmentCfg['markdownFileName'] )]($( $pageCfg['mediaPathPandoc'] )/$( $attachmentCfg['markdownFileName'] ))"
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                            if ($config['mediaLinkFormat']['value'] -eq 2) {
+                                @{
+                                    description = 'Use wikilinks for images'
+                                    replacements = @(
+                                        @{
+                                            # E.g. '![some \[text\]](C:/temp/notes/mynotebook/media/mynotebook-mysection-mypage-image1.png){width="1in" height="2in"}' -> '![[mynotebook-mysection-mypage-image1.png]]'. The image names are matched by their prefix, since it may contain any parentheses, e.g. 'f(g(x))' or 'a)'. Wikilinks have no alternative text, and markdown viewers that support wikilinks don't support pandoc's link attributes
+                                            searchRegex = '!\[(?:\\.|[^\\\]])*\]\(<?' + [regex]::Escape("$( $pageCfg['mediaPathPandoc'] )/$( $pageCfg['mediaNamePrefix'] )-") + '([^\s()<>\[\]]+)>?\)(?:\{[^{}]*\})?'
+                                            replacement = "![[$( $pageCfg['mediaNamePrefix'].Replace('$', '$$') )-`$1]]" # Escape '$', since it denotes a substitution in the replacement
                                         }
                                     )
                                 }
@@ -1241,18 +1310,14 @@ Function Convert-OneNotePage {
                 foreach ($image in $images) {
                     # Rename Image
                     try {
-                        $newimageName = if ($config['medialocation']['value'] -eq 2) {
-                            "$( $pageCfg['filePathRelUnderscore'] )-$($image.BaseName)$($image.Extension)"
-                        }else {
-                            "$( $pageCfg['pathFromRootCompat'] )-$($image.BaseName)$($image.Extension)"
-                        }
+                        $newimageName = "$( $pageCfg['mediaNamePrefix'] )-$($image.BaseName)$($image.Extension)"
                         $newimagePath = [io.path]::combine( $pageCfg['mediaPath'], $newimageName )
                         "Moving image: $( $image.FullName ) to $( $newimagePath )" | Write-Verbose
                         if (!$config['dryRun']['value']) {
                             $item = Move-Item -Path "$( $image.FullName )" -Destination $newimagePath -Force -ErrorAction Stop -PassThru
                         }
                     }catch {
-                        Write-Error "Failed to rename image $( $image.FullName ) to $( $item.FullName ). Exception: $( $_.Exception.Message )" -ErrorAction Continue
+                        Write-Error "Failed to rename image $( $image.FullName ) to $( $newimagePath ). Exception: $( $_.Exception.Message )" -ErrorAction Continue
                     }
                     # Mutate markdown content with new image references
                     try {

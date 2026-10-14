@@ -18,6 +18,7 @@ The powershell script `ConvertOneNote2MarkDown-v2.ps1` will utilize the OneNote 
 * Choose between putting all media (images, attachments) in a central `/media` folder for each notebook, or in a separate `/media` folder in each folder of the hierarchy
   * Symbols in media file names removed for link compatibility
   * Updates media references in the resulting `.md` files, generating **relative** references to the media files within the markdown document
+  * Choose whether to use markdown links with relative paths, or wikilinks with only the file name (e.g. `![[image.png]]`), which don't break when moving notes or media in markdown viewers like Obsidian. With wikilinks, media file names are unique across notebooks
 * Choose between **discarding or keeping intermediate Word files**. Intermediate Word files are stored in a central notebook folder.
 * Choose between converting from existing `.docx` (90% faster) and creating new ones - useful if just want to test differences in the various processing options without generating new `.docx`each time
 * Choose between naming `.docx` files using page ID and last modified epoch date e.g. `{somelongid}-1234567890.docx` or hierarchy e.g. `<sectiongroup>-<section>-<page>.docx`

@@ -49,6 +49,11 @@ $mdFileNameAndFolderNameMaxLength = 32
 # 2: Separate 'media' folder for each folder in the hierarchy
 $medialocation = 1
 
+# Whether to link media (e.g. images, attachments) with markdown links or wikilinks
+# 1: Markdown links with relative paths, e.g. ![](../media/mysection-mypage-image1.png) - Default
+# 2: Wikilinks with only the file name, e.g. ![[mynotebook-mysection-mypage-image1.png]]. For markdown viewers that find linked files anywhere by their name (e.g. Obsidian), so that links don't break when moving notes or media. Media file names include the notebook name, so that they are unique across notebooks
+$mediaLinkFormat = 1
+
 # Specify Pandoc output format and optional extension(s) in the format: <markdownformat><+extension><-extension>
 # Use this to customize the markdown flavor
 # Extension(s) must be supported by your pandoc version. See: https://pandoc.org/MANUAL.html#options

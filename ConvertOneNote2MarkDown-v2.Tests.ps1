@@ -885,6 +885,27 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
             }
         }
 
+        It "Should generate unique media file names for each page, even for subpages and identically-named pages of a Section" {
+            foreach ($medialocation in 1, 2) {
+                $params['Config']['medialocation']['value'] = $medialocation
+                foreach ($fakeHierarchy in @( (Get-FakeOneNoteHierarchy), (Get-FakeOneNoteHierarchyWithDuplicatePageNames) )) {
+                    $params['SectionGroups'] = $fakeHierarchy.Notebooks.Notebook
+                    $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+                    # Media file names must be unique within each media folder
+                    $result | Group-Object { [io.path]::combine( $_['mediaPath'], $_['mediaNamePrefix'] ) } | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name } | Should -Be $null
+                }
+            }
+
+            # Media file names of first level pages that are not identically-named are unchanged
+            $params['Config']['medialocation']['value'] = 1
+            $params['SectionGroups'] = (Get-FakeOneNoteHierarchy).Notebooks.Notebook
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+            foreach ($pageCfg in @( $result | Where-Object { $_['pageLevel'] -eq 1 } )) {
+                $pageCfg['mediaNamePrefix'] | Should -Be $pageCfg['pathFromRootCompat']
+            }
+        }
+
         It "Should honor config notesdestpath" {
             if ($env:OS -match 'windows') {
                 $params['Config']['notesdestpath']['value'] = 'D:\foo\bar'
@@ -1114,6 +1135,92 @@ Describe 'New-SectionGroupConversionConfig' -Tag 'Unit' {
             foreach ($pageCfg in $result) {
                 $pageCfg['mediaParentPath'] | Should -Be $pageCfg['fileDirectory']
             }
+        }
+
+        It "Should honor config mediaLinkFormat" {
+            $params['Config']['mediaLinkFormat']['value'] = 2
+            $params['Config']['mdFileNameAndFolderNameMaxLength']['value'] = 100 # So that page names are truncated to 100 characters
+            $fakeHierarchy = Get-FakeOneNoteHierarchy
+            $pages = $fakeHierarchy.SelectNodes("//*[local-name()='Page']")
+            $pages[0].SetAttribute('name', 'C# notes ^1 f(g(x))')
+            $pages[1].SetAttribute('name', 'a' * 100) # A subpage of the first page, so that the prefix of media file names is longer than 100 characters
+            $pages[2].SetAttribute('name', 'b' * 100) # A subpage of the subpage
+            $pages[3].SetAttribute('name', 'a) exercise') # A subpage of the first page, with an unbalanced parenthesis
+            $params['SectionGroups'] = $fakeHierarchy.Notebooks.Notebook
+            Mock Get-OneNotePageContent {
+                $pageContent = Get-FakeOneNotePageContent
+                $pageContent.SelectNodes("//*[local-name()='InsertedFile']")[0].SetAttribute('preferredName', "$( 'c' * 140 ).pdf") # So that the attachment's name is longer than 150 characters
+                $pageContent
+            }
+
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+            # 15 pages from 'test' notebook, 15 pages from 'test2' notebook
+            $result.Count | Should -Be 48
+
+            # Media file names should be unique across notebooks, start with the notebook name, not contain '#' or '^', and their prefix should be no longer than 100 characters
+            $result | Group-Object { $_['mediaNamePrefix'] } | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name } | Should -Be $null
+            foreach ($pageCfg in $result) {
+                $pageCfg['mediaNamePrefix'] | Should -Match "^$( [regex]::Escape($pageCfg['notebookName']) )-"
+                $pageCfg['mediaNamePrefix'] | Should -Not -Match '[#^]'
+                $pageCfg['mediaNamePrefix'].Length | Should -BeLessOrEqual 100
+                foreach ($attachmentCfg in $pageCfg['insertedAttachments']) {
+                    # Attachment names should be prefixed, and no longer than 150 characters
+                    $name = "$( $pageCfg['mediaNamePrefix'] )-$( $attachmentCfg['object'].preferredName | Remove-InvalidFileNameCharsInsertedFiles )"
+                    if ($name.Length -le 150) {
+                        $attachmentCfg['nameCompat'] | Should -Be $name
+                    }else {
+                        $attachmentCfg['nameCompat'].Length | Should -BeLessOrEqual 150
+                        $attachmentCfg['nameCompat'] | Should -Match "^$( [regex]::Escape($pageCfg['mediaNamePrefix']) )-c+-[0-9a-f]{8}\.pdf$"
+                    }
+                    Split-Path $attachmentCfg['destination'] -Leaf | Should -Be $attachmentCfg['nameCompat']
+                }
+            }
+            $result[0]['mediaNamePrefix'] | Should -Be 'test-s0-C--notes--1-f(g(x))'
+            $result[1]['mediaNamePrefix'] | Should -Match '^test-s0-C--notes--1-f\(g\(x\)\)-[0-9a-f]{8}-a{50}$' # Keeps the start and the end, cut at a dash if possible
+            $result[2]['mediaNamePrefix'] | Should -Match '^test-s0-C--notes--1-f\(g\(x\)\)-[0-9a-f]{8}-b{50}$'
+            $result[3]['mediaNamePrefix'] | Should -Be 'test-s0-C--notes--1-f(g(x))-a)-exercise'
+
+            # Mutate
+            $pageCfg = $result[3]
+            $fakeMarkdownContent = @(
+                "![some \[text\]]($( $pageCfg['mediaPathPandoc'] )/$( $pageCfg['mediaNamePrefix'] )-image1.png){width=`"1in`" height=`"2in`"}"
+                "![]($( $pageCfg['mediaPathPandoc'] )/$( $pageCfg['mediaNamePrefix'] )-image2.png)![]($( $pageCfg['mediaPathPandoc'] )/$( $pageCfg['mediaNamePrefix'] )-image3.png)"
+                $pageCfg['insertedAttachments'][0]['object'].preferredName
+            ) -join "`n"
+            $mutated = $fakeMarkdownContent
+            foreach ($m in $pageCfg['mutations']) {
+                foreach ($r in $m['replacements']) {
+                    $mutated = $mutated -replace $r['searchRegex'], $r['replacement']
+                }
+            }
+
+            # Should use wikilinks for images and attachments. Ignore first 8 lines for page header
+            $split = $mutated -split "`n"
+            $split[8] | Should -Be "![[$( $pageCfg['mediaNamePrefix'] )-image1.png]]"
+            $split[9] | Should -Be "![[$( $pageCfg['mediaNamePrefix'] )-image2.png]]![[$( $pageCfg['mediaNamePrefix'] )-image3.png]]"
+            $split[10] | Should -Be "[[$( $pageCfg['insertedAttachments'][0]['nameCompat'] )]]"
+
+            $params['Config']['mediaLinkFormat']['value'] = 1
+
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+
+            # Should use markdown links with relative paths
+            $pageCfg = $result[0]
+            $pageCfg['mediaNamePrefix'] | Should -Be 's0-C#-notes-^1-f(g(x))'
+            $pageCfg['insertedAttachments'][0]['nameCompat'] | Should -Be ($pageCfg['insertedAttachments'][0]['object'].preferredName | Remove-InvalidFileNameCharsInsertedFiles)
+            $mutated = @(
+                "![some \[text\]]($( $pageCfg['mediaPathPandoc'] )/$( $pageCfg['mediaNamePrefix'] )-image1.png){width=`"1in`" height=`"2in`"}"
+                $pageCfg['insertedAttachments'][0]['object'].preferredName
+            ) -join "`n"
+            foreach ($m in $pageCfg['mutations']) {
+                foreach ($r in $m['replacements']) {
+                    $mutated = $mutated -replace $r['searchRegex'], $r['replacement']
+                }
+            }
+            $split = $mutated -split "`n"
+            $split[8] | Should -Be "![some [text]]($( $pageCfg['levelsPrefix'] )media/$( $pageCfg['mediaNamePrefix'] )-image1.png){width=`"1in`" height=`"2in`"}"
+            $split[9] | Should -Be "[$( $pageCfg['insertedAttachments'][0]['nameCompat'] )]($( $pageCfg['levelsPrefix'] )media/$( $pageCfg['insertedAttachments'][0]['nameCompat'] ))"
         }
 
         It "Should honor config conversion" {
@@ -1760,14 +1867,15 @@ Describe 'Convert-OneNotePage' -Tag 'Unit' {
 
             Assert-MockCalled -CommandName Get-ChildItem -Times 1 -Scope It
             Assert-MockCalled -CommandName Move-Item -Times 1 -Scope It
+            Assert-MockCalled -CommandName Move-Item -ParameterFilter { (Split-Path $Destination -Leaf) -eq "$( $params['ConversionConfig']['mediaNamePrefix'] )-image.jpg" } -Times 1 -Scope It
         }
 
-        It "Does not halt conversion if renaming image(s) fails" {
+        It "Does not halt conversion if renaming image(s) fails, and reports the image's destination path" {
             Mock Move-Item { throw }
 
             $err = Convert-OneNotePage @params 6>$null 2>&1
 
-            $err.Exception.Message | Select-Object -First 1 | Should -match 'Failed to rename image'
+            $err.Exception.Message | Select-Object -First 1 | Should -match "Failed to rename image .+ to $( [regex]::Escape([io.path]::combine( $params['ConversionConfig']['mediaPath'], "$( $params['ConversionConfig']['mediaNamePrefix'] )-image.jpg" )) )\."
         }
 
         It "Markdown Mutation: Rename page image references in markdown to unique names" {
