@@ -861,6 +861,12 @@ Function New-SectionGroupConversionConfig {
                             $cfg['notesBaseDirectory']
                         }
                         $pageCfg['mediaPath'] = [io.path]::combine( $pageCfg['mediaParentPath'], 'media' )
+                        $pageCfg['mediaNamePrefix'] = if ($config['medialocation']['value'] -eq 2) {
+                            $pageCfg['filePathRelUnderscore']
+                        }else {
+                            # The media of all of a notebook's pages are saved in the same folder, so the prefix includes the page's parent pages and the postfix of identically-named pages, i.e. the .md file's path. Or else e.g. subpages with the same name would overwrite each other's media
+                            "$( $sectionCfg['pathFromRoot'] )$( [io.path]::DirectorySeparatorChar )$( $pageCfg['filePathRel'] )" | Remove-InvalidFileNameChars
+                        }
                         $pageCfg['mediaParentPathPandoc'] = [io.path]::combine( $pageCfg['tmpPath'] ).Replace( [io.path]::DirectorySeparatorChar, '/' ) # Pandoc outputs paths in markdown with with front slahes after the supplied <mediaPath>, e.g. '<mediaPath>/media/image.png'. So let's use a front-slashed supplied mediaPath
                         $pageCfg['mediaPathPandoc'] = [io.path]::combine( $pageCfg['tmpPath'], 'media').Replace( [io.path]::DirectorySeparatorChar, '/' ) # Pandoc outputs paths in markdown with with front slahes after the supplied <mediaPath>, e.g. '<mediaPath>/media/image.png'. So let's use a front-slashed supplied mediaPath
                         $pageCfg['docxExportFilePath'] = if ($config['docxNamingConvention']['value'] -eq 1) {
@@ -1241,18 +1247,14 @@ Function Convert-OneNotePage {
                 foreach ($image in $images) {
                     # Rename Image
                     try {
-                        $newimageName = if ($config['medialocation']['value'] -eq 2) {
-                            "$( $pageCfg['filePathRelUnderscore'] )-$($image.BaseName)$($image.Extension)"
-                        }else {
-                            "$( $pageCfg['pathFromRootCompat'] )-$($image.BaseName)$($image.Extension)"
-                        }
+                        $newimageName = "$( $pageCfg['mediaNamePrefix'] )-$($image.BaseName)$($image.Extension)"
                         $newimagePath = [io.path]::combine( $pageCfg['mediaPath'], $newimageName )
                         "Moving image: $( $image.FullName ) to $( $newimagePath )" | Write-Verbose
                         if (!$config['dryRun']['value']) {
                             $item = Move-Item -Path "$( $image.FullName )" -Destination $newimagePath -Force -ErrorAction Stop -PassThru
                         }
                     }catch {
-                        Write-Error "Failed to rename image $( $image.FullName ) to $( $item.FullName ). Exception: $( $_.Exception.Message )" -ErrorAction Continue
+                        Write-Error "Failed to rename image $( $image.FullName ) to $( $newimagePath ). Exception: $( $_.Exception.Message )" -ErrorAction Continue
                     }
                     # Mutate markdown content with new image references
                     try {
