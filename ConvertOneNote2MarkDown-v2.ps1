@@ -166,10 +166,11 @@ Whether to clear escape symbols from md files. See: https://pandoc.org/MANUAL.ht
 1: Clear all '\' characters  - Default
 2: Clear all '\' characters except those preceding alphanumeric characters
 3: Keep '\' symbol escape
+4: Keep '\' only where it changes the rendering: rebuild lists and line breaks that pandoc escaped ('\- item', '7\. item', '\' at the end of a line), remove other escapes that don't matter
 '@
             default = 1
             value = 1
-            validateRange = 1,3
+            validateRange = 1,4
         }
         newlineCharacter = @{
             description = @'
@@ -495,6 +496,107 @@ Function Encode-Markdown {
         }
     }
     $Name
+}
+
+Function Repair-MarkdownEscapes {
+    [CmdletBinding()]
+    param (
+        # The markdown content produced by pandoc (any newline style)
+        [Parameter(Mandatory,Position = 0,ValueFromPipeline = $true)]
+        [AllowEmptyString()]
+        [string]
+        $Content
+    )
+
+    process {
+        # Pandoc escapes text that merely looks like markdown. OneNote pages often start paragraphs with a literal '- ' or '7.' (no real list),
+        # which ends up as '\- item' or '7\. item'. Rebuild those lists, and remove only the escapes that can't change how the text is rendered.
+        # Fenced code blocks and inline code are never touched.
+        $saved = New-Object 'System.Collections.Generic.List[string]'
+        $shield = [System.Text.RegularExpressions.MatchEvaluator]{
+            param ($m)
+            $saved.Add($m.Value)
+            "MDSHIELD$( $saved.Count - 1 )END"
+        }
+        $text = $Content -replace '\r\n', "`n"
+        $text = [regex]::Replace($text, '(?ms)(?:^[ \t]*)?(`{3,})[^\n`]*\n.*?^[ \t]*\1`*[ \t]*$', $shield)
+        $text = [regex]::Replace($text, '(`+)(?!`)(.+?)(?<!`)\1(?!`)', $shield)
+
+        # A backslash at the end of a line is a hard break only in some renderers: use two spaces. At the end of a paragraph it has no effect.
+        $text = $text -replace '(?m)(?<!\\)\\$(?=\n[^\n])', '  '
+        $text = $text -replace '(?m)(?<!\\)\\[ \t]*$', ''
+        $text = $text -replace '(?m) +$(?=\n[ \t]*\n)', ''
+
+        # Lists
+        $text = $text -replace '(?m)^[ \t\u00A0>]*\\?-[ \t\u00A0]*$\n?', '' # A lone '-' or '\-' line is an empty bullet (below a text line, '-' would even make a heading)
+        $text = $text -replace '(?m)^((?:[ \t]*>)*[ \t]*)\\-[ \t\u00A0]+', '$1- '
+        $text = $text -replace '(?m)^(\d+)\\\.[ \t]*\n(?:[ \t]*\n)+(?=\S)', '$1. ' # A number alone on its line, with the item text in the next paragraph
+        $text = $text -replace '(?m)^((?:[ \t]*>)*[ \t]*\d+)\\\.[ \t\u00A0]+', '$1. '
+        $listStart = '^[ \t\u00A0>]*(?:[-*+]|\d+[.)])\s'
+        $lines = $text -split "`n"
+        $isBlank = '^[ \t\u00A0>]*$' # Lines with only non-breaking spaces or an empty block quote ('> ') become blank later on (keepspaces)
+        $text = @(
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+                # Drop the blank lines between two list items
+                if ($lines[$i] -match $isBlank -and $i -gt 0) {
+                    $prev = $i - 1
+                    while ($prev -gt 0 -and $lines[$prev] -match $isBlank) { $prev-- }
+                    $next = $i + 1
+                    while ($next -lt $lines.Count - 1 -and $lines[$next] -match $isBlank) { $next++ }
+                    if ($lines[$prev] -match $listStart -and $next -lt $lines.Count -and $lines[$next] -match $listStart) {
+                        continue
+                    }
+                }
+                $lines[$i]
+            }
+        ) -join "`n"
+
+        # Escapes that can't change the rendering
+        $unescape = [System.Text.RegularExpressions.MatchEvaluator]{
+            param ($m)
+            if ($m.Value -eq '\\') { return $m.Value } # An escaped backslash is matched as a pair, so it can't hide the character after it
+            $c = $m.Value[1]
+            $start = $m.Index
+            $lineStart = if ($start -gt 0) { $text.LastIndexOf([char]10, $start - 1) + 1 } else { 0 }
+            $prefix = $text.Substring($lineStart, $start - $lineStart)
+            $before = if ($start -gt 0) { [string]$text[$start - 1] } else { '' }
+            $afterIndex = $start + 2
+            $after = if ($afterIndex -lt $text.Length) { [string]$text[$afterIndex] } else { '' }
+            $atLineStart = $prefix.Trim(" `t>").Length -eq 0
+            if (',."''%@/?!=+-#>'.Contains($c)) {
+                $keep = ('=+-#>'.Contains($c) -and $atLineStart) -or ($c -eq '.' -and $prefix -match '^[ \t>]*\d+$') -or ($c -eq '!' -and $after -eq '[')
+                if (!$keep -and $c -eq '#') {
+                    $lineEnd = $text.IndexOf([char]10, $start)
+                    $line = if ($lineEnd -lt 0) { $text.Substring($lineStart) } else { $text.Substring($lineStart, $lineEnd - $lineStart) }
+                    $keep = $line -match '^\s*#{1,6}(?:\s|$)' # A closing '\#' in a heading stays
+                }
+            }elseif ($c -eq '*' -or $c -eq '_') {
+                $loneGap = ($before -eq '' -or $before -match '^\s$') -and ($after -eq '' -or $after -match '^\s$')
+                $intraword = $before -match '^[\p{L}\p{N}]$' -and $after -match '^[\p{L}\p{N}]$'
+                if ($c -eq '*') {
+                    $pStart = if ($start -ge 2) { $text.LastIndexOf("`n`n", $start - 1, [System.StringComparison]::Ordinal) } else { -1 }
+                    $pEnd = $text.IndexOf("`n`n", $start, [System.StringComparison]::Ordinal)
+                    $from = if ($pStart -ge 0) { $pStart + 2 } else { 0 }
+                    $to = if ($pEnd -ge 0) { $pEnd } else { $text.Length }
+                    $paragraph = $text.Substring($from, $to - $from)
+                    $keep = $atLineStart -or !($loneGap -or ($paragraph.Length - $paragraph.Replace('*', '').Length) -eq 1)
+                }else {
+                    $keep = $atLineStart -or !($loneGap -or $intraword)
+                }
+            }else {
+                $keep = $true
+            }
+            if ($keep) { $m.Value } else { [string]$c }
+        }
+        $text = [regex]::Replace($text, '\\\\|\\.', $unescape)
+
+        # Restore code (fences can contain inline code and vice versa, so repeat until nothing is left)
+        $restore = [System.Text.RegularExpressions.MatchEvaluator]{ param ($m) $saved[[int]$m.Groups[1].Value] }
+        while ($text -match 'MDSHIELD\d+END') {
+            $text = [regex]::Replace($text, 'MDSHIELD(\d+)END', $restore)
+        }
+        $text
+    }
 }
 
 Function Set-ContentNoBom {
@@ -1282,6 +1384,9 @@ Function Convert-OneNotePage {
                             ''
                         }
                     ) -join "`n"
+                    if ($config['keepescape']['value'] -eq 4) {
+                        $content = Repair-MarkdownEscapes -Content $content
+                    }
                 }
 
                 # Mutate

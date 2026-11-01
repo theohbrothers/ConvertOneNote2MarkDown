@@ -77,6 +77,7 @@ $keepspaces = 1
 # 1: Clear all '\' characters  - Default
 # 2: Clear all '\' characters except those preceding alphanumeric characters
 # 3: Keep '\' symbol escape
+# 4: Keep '\' only where it changes the rendering: rebuild lists and line breaks that pandoc escaped ('\- item', '7\. item', '\' at the end of a line), remove other escapes that don't matter
 $keepescape = 1
 
 # Whether to use Line Feed (LF) or Carriage Return + Line Feed (CRLF) for new lines
