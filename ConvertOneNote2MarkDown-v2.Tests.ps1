@@ -407,6 +407,93 @@ Describe "Encode-Markdown" -Tag 'Unit' {
 
 }
 
+Describe "Repair-MarkdownEscapes" -Tag 'Unit' {
+
+    Context 'Behavior' {
+
+        It "Should turn escaped list markers into lists (<Name>)" -TestCases @(
+            @{ Name = 'bullet'; Content = '\- one'; Expected = '- one' }
+            @{ Name = 'indented bullet'; Content = '  \- one'; Expected = '  - one' }
+            @{ Name = 'number'; Content = '7\. one'; Expected = '7. one' }
+            @{ Name = 'number alone before its text'; Content = "7\.`n`nitem text"; Expected = '7. item text' }
+        ) {
+            param ($Name, $Content, $Expected)
+
+            Repair-MarkdownEscapes -Content $Content | Should -BeExactly $Expected
+        }
+
+        It "Should accept a non-breaking space after an escaped list marker" {
+            $nbsp = [char]0x00A0
+            Repair-MarkdownEscapes -Content "\-$nbsp one`n7\.$nbsp two" | Should -BeExactly "- one`n7. two"
+        }
+
+        It "Should repair lists inside block quotes (keepspaces removes the '>' later)" {
+            Repair-MarkdownEscapes -Content "> 1\. one`n>`n> 2\. two`n>`n> \- x" | Should -BeExactly "> 1. one`n> 2. two`n> - x"
+        }
+
+        It "Should drop a lone dash line that only had a line-end backslash" {
+            Repair-MarkdownEscapes -Content "- one`n-\`n`n`n" | Should -BeExactly "- one`n`n`n"
+        }
+
+        It "Should remove blank lines between list items" {
+            Repair-MarkdownEscapes -Content "\- a`n`n\- b`n`n\- c" | Should -BeExactly "- a`n- b`n- c"
+            Repair-MarkdownEscapes -Content "1\. a`n`n2\. b" | Should -BeExactly "1. a`n2. b"
+        }
+
+        It "Should remove several blank lines, also with non-breaking spaces, between list items" {
+            Repair-MarkdownEscapes -Content "- a`n`n`n$( [char]0x00A0 )`n`n- b" | Should -BeExactly "- a`n- b"
+            Repair-MarkdownEscapes -Content "1. a`n`n`n`n2. b`n`ntext" | Should -BeExactly "1. a`n2. b`n`ntext"
+            Repair-MarkdownEscapes -Content "- a`n`n> $( [char]0x00A0 ) `n`n- b" | Should -BeExactly "- a`n- b"
+        }
+
+        It "Should keep blank lines between a list and a paragraph" {
+            Repair-MarkdownEscapes -Content "- a`n`ntext" | Should -BeExactly "- a`n`ntext"
+        }
+
+        It "Should remove lone dash lines, also with non-breaking spaces" {
+            Repair-MarkdownEscapes -Content "text`n-`n\-`n-$( [char]0x00A0 )`nmore" | Should -BeExactly "text`nmore"
+        }
+
+        It "Should turn a backslash at the end of a line into two spaces, and drop it at the end of a paragraph" {
+            Repair-MarkdownEscapes -Content "one\`ntwo\`n`nnext" | Should -BeExactly "one  `ntwo`n`nnext"
+        }
+
+        It "Should remove escapes that can't change the rendering" {
+            Repair-MarkdownEscapes -Content 'a --\> b, snake\_case, 1\. no, end\.' | Should -BeExactly 'a --> b, snake_case, 1. no, end.'
+        }
+
+        It "Should keep escapes that change the rendering (<Name>)" -TestCases @(
+            @{ Name = 'quote at line start'; Content = '\> not a quote' }
+            @{ Name = 'underscore at line start'; Content = '\_not emphasis_' }
+            @{ Name = 'image-like'; Content = 'a \![b](c)' }
+            @{ Name = 'pair of asterisks'; Content = 'a \*b\* c' }
+            @{ Name = 'brackets'; Content = '\[x\]' }
+        ) {
+            param ($Name, $Content)
+
+            Repair-MarkdownEscapes -Content $Content | Should -BeExactly $Content
+        }
+
+        It "Should keep Windows and UNC paths" {
+            $content = 'C:\Program Files\App and \\server\share\dir'
+            Repair-MarkdownEscapes -Content $content | Should -BeExactly $content
+        }
+
+        It "Should not touch code" {
+            $content = "``\- keep \_this`` and`n`n``````text`n\- keep`n7\. keep\`n``````"
+            Repair-MarkdownEscapes -Content $content | Should -BeExactly $content
+        }
+
+        It "Should give the same result when run twice" {
+            $content = "\- a`n`n\- b\`nc`n`n7\. x --\> y\_z\`n`nend\"
+            $once = Repair-MarkdownEscapes -Content $content
+            Repair-MarkdownEscapes -Content $once | Should -BeExactly $once
+        }
+
+    }
+
+}
+
 Describe "New-OneNoteConnection" -Tag 'Unit' {
 
     Context 'Behavior' {
@@ -1377,6 +1464,27 @@ foo\bar\0
                 $fakeMarkdownContent.Count | Should -Be 10
                 $fakeMarkdownContent[8] | Should -Be 'hello\$\^\\\*\_\[\]world'
                 $fakeMarkdownContent[9] | Should -Be 'foo\bar\0'
+            }
+        }
+
+        It "Should leave backslashes to Repair-MarkdownEscapes if config keepescape is 4" {
+            $params['Config']['keepescape']['value'] = 4
+
+            $result = @( New-SectionGroupConversionConfig @params 6>$null )
+            $result.Count | Should -Be 48
+
+            foreach ($pageCfg in $result) {
+                $fakeMarkdownContent = 'hello\$\^\\\*\_\[\]world'
+
+                # Mutate
+                foreach ($m in $pageCfg['mutations']) {
+                    foreach ($r in $m['replacements']) {
+                        $fakeMarkdownContent = $fakeMarkdownContent -replace $r['searchRegex'], $r['replacement']
+                    }
+                }
+
+                # None of the mutations may touch backslashes
+                $fakeMarkdownContent | Should -Match ([regex]::Escape('hello\$\^\\\*\_\[\]world'))
             }
         }
 
